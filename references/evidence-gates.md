@@ -32,7 +32,7 @@
 
 ### G3 分支完整性
 
-要求模型定义完整，目标与约束对应题意，代码可运行，结果由代码产生，并含基线和适当诊断。每个核心结果必须登记到 `synthesis/result_manifest.csv`，能指回命令、输入、种子、环境和文件哈希。只有公式、只有代码或结果台账断链均不通过。
+正式建模前要求 Innovation Engine 通过：候选数量和数学机制差异达到当前模式下限；晋级路线的最近先例与创新差异有原始文献定位；便宜证伪实验含同口径基线、命令、种子、结果文件和哈希；Critic 阻断项已关闭；Jury 只晋级 2–3 条路线。随后要求模型定义完整，目标与约束对应题意，代码可运行，结果由代码产生，并含基线和适当诊断。每个核心结果必须登记到 `synthesis/result_manifest.csv`，能指回命令、输入、种子、环境和文件哈希。只有算法名、只有公式、只有代码或结果台账断链均不通过。
 
 ### G4 统计与不确定性
 
@@ -60,6 +60,9 @@
 - `problem_fit`
 - `assumption_risk`
 - `data_support`
+- `structural_novelty`
+- `novelty_evidence`
+- `falsification_status`
 - `baseline_gain`
 - `diagnostic_quality`
 - `uncertainty_stability`

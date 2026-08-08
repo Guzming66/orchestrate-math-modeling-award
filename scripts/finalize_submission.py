@@ -18,6 +18,7 @@ from pathlib import Path
 from package_submission import package_workspace
 from build_latex import strip_tex_comments
 from snapshot_environment import snapshot
+from validate_innovation_portfolio import validate_innovation_portfolio
 from validate_task_board import validate_task_board
 
 
@@ -358,6 +359,10 @@ def finalize(workspace: Path) -> dict[str, object]:
     errors.extend(str(item) for item in task_report.get("errors", []))
     warnings.extend(str(item) for item in task_report.get("warnings", []))
 
+    innovation_report = validate_innovation_portfolio(workspace)
+    errors.extend(str(item) for item in innovation_report.get("errors", []))
+    warnings.extend(str(item) for item in innovation_report.get("warnings", []))
+
     citation_exit, citation_output = run_citation_validator(workspace)
     if citation_exit != 0:
         errors.append("citation validator failed")
@@ -415,6 +420,7 @@ def finalize(workspace: Path) -> dict[str, object]:
         "checks": checks,
         "environment_status": environment_report.get("status"),
         "task_status": task_report.get("status"),
+        "innovation_status": innovation_report.get("status"),
         "citation_validator_output": citation_output[-4000:],
         "build_status": build_report.get("status"),
         "ai_details_build_status": ai_details_report.get("status"),

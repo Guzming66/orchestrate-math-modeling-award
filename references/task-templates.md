@@ -6,16 +6,17 @@
 2. 国赛规则审计
 3. 文献真实性审计
 4. 题面信号路由
-5. 独立建模分支
-6. 数据审计
-7. 统计审计
-8. 不确定性与量纲审计
-9. 独立复现
-10. 展示论文标杆审计
-11. 红队评委
-12. 摘要 30 秒盲审
-13. 论文总编
-14. LaTeX 与提交包审计
+5. Innovation Engine 独立任务
+6. 独立建模分支
+7. 数据审计
+8. 统计审计
+9. 不确定性与量纲审计
+10. 独立复现
+11. 展示论文标杆审计
+12. 红队评委
+13. 摘要 30 秒盲审
+14. 论文总编
+15. LaTeX 与提交包审计
 
 ## 所有任务的共同规则
 
@@ -47,6 +48,12 @@
 任务说明：只读取官方题面和原始附件，不看其他分支。不得按 A/B/C/D/E 字母预设题型。
 
 输出 `shared/problem_route.md` 的候选草案：数学对象、任务动词、约束结构、数据机制、可验证锚点、赛程风险、三条异质路线和一个强基线。每条路线说明关键假设、最小闭环、预计计算成本、失败条件及与其他路线的结构差异。
+
+## Innovation Engine 独立任务
+
+完整读取 [innovation-engine.md](innovation-engine.md)，按 Wave 1–3 分配 Structure Mapper、互相隔离的 Route Scouts、Cross-domain Analogist、Literature Auditor、Experimenter、Critic 和 Jury。每个任务只写自己负责的 `innovation/` 文件；冻结前不得读取其他侦察路线或主任务偏好。
+
+所有候选必须明确题目特殊结构、传统基线、机制改变、跨域来源（如有）、便宜证伪实验、复杂度必要性和失败条件。Literature Auditor 使用 `$citation-management` 核验最近先例与原文支持；Experimenter 保存命令、种子、结果文件和哈希；Critic 与 Jury 不得由候选作者兼任。只有 `validate_innovation_portfolio.py` 通过后才启动正式建模分支。
 
 ## 独立建模分支
 

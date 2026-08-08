@@ -11,6 +11,16 @@ python <skill>/scripts/validate_task_board.py <workspace> --final
 
 普通检查报告未知依赖、环、越序完成和逾期；最终检查还要求所有阻断任务关闭并具备负责人、时间、后备方案和证据。
 
+## Innovation Engine
+
+在正式模型分支启动前运行：
+
+```text
+python <skill>/scripts/validate_innovation_portfolio.py <workspace>
+```
+
+要求 `candidate_portfolio.csv` 达到当前模式的候选数和数学机制家族下限，`novelty_audit.csv` 覆盖晋级候选的最近先例与原文定位，`feasibility_experiments.csv` 中的结果文件和 SHA-256 一致，`critic_findings.csv` 无开放阻断/重大项，`selection.csv` 只晋级 2–3 条有完整证据的路线。终审器会重新运行该检查。
+
 ## 数据与结果溯源
 
 - `audits/data/data_provenance.csv` 必须覆盖 `inputs/original/` 与 `inputs/external/` 的每个文件。记录来源、授权/条款、取得时间、原始和当前 SHA-256、使用字段、状态及复核人。
@@ -46,4 +56,4 @@ python <skill>/scripts/package_submission.py <workspace> --require-paper
 python <skill>/scripts/finalize_submission.py <workspace>
 ```
 
-终审器执行环境快照、任务板最终检查、DOI 验证、官方来源、文献、输入、结果、复现、证据矩阵、G0—G7、LaTeX 提交构建和 CUMCM 支撑包扫描。通过后写出 `submission/submission_manifest.json`，其中保存论文和支撑包 SHA-256；任一检查失败时只写阻断报告，不宣称可提交。
+终审器执行环境快照、任务板最终检查、Innovation Engine、DOI 验证、官方来源、文献、输入、结果、复现、证据矩阵、G0—G7、LaTeX 提交构建和 CUMCM 支撑包扫描。通过后写出 `submission/submission_manifest.json`，其中保存论文和支撑包 SHA-256；任一检查失败时只写阻断报告，不宣称可提交。

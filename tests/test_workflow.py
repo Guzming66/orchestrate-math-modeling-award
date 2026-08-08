@@ -18,6 +18,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from finalize_submission import check_cumcm_ai_compliance, check_data_provenance, finalize
 from package_submission import package_workspace
+from validate_innovation_portfolio import validate_innovation_portfolio
 from validate_task_board import validate_task_board
 
 
@@ -44,6 +45,149 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout)
 
+    def write_csv_rows(self, path: Path, rows: list[dict[str, str]]) -> None:
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            fieldnames = csv.DictReader(handle).fieldnames
+        self.assertIsNotNone(fieldnames)
+        with path.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def complete_innovation_fixture(self, root: Path) -> None:
+        candidates: list[dict[str, str]] = []
+        for index in range(8):
+            candidate_id = f"C{index + 1}"
+            candidates.append(
+                {
+                    "candidate_id": candidate_id,
+                    "scout_id": f"S{index % 4 + 1}",
+                    "origin_lens": ("mechanism", "uncertainty", "optimization", "cross-domain")[index % 4],
+                    "problem_structure": "verified dependency structure",
+                    "mechanism_change": f"mechanism change {index + 1}",
+                    "innovation_unit": "structure + change + tested gain",
+                    "mechanism_family": f"family-{index % 4 + 1}",
+                    "mathematical_formulation": "explicit objective and constraints",
+                    "baseline": "strong baseline",
+                    "cross_domain_source": "inventory control" if index == 0 else "reliability theory" if index == 1 else "",
+                    "data_needs": "official input only",
+                    "validation_plan": "held-out and edge-case tests",
+                    "cheap_falsifier": "small exact fixture",
+                    "failure_condition": "no verified gain",
+                    "complexity_justification": "one necessary mechanism change",
+                    "risk_role": "safe" if index == 0 else "stretch" if index == 1 else "balanced",
+                    "status": "survivor" if index < 2 else "rejected",
+                    "notes": "fixture",
+                }
+            )
+        self.write_csv_rows(root / "innovation" / "candidate_portfolio.csv", candidates)
+
+        novelty: list[dict[str, str]] = []
+        experiments: list[dict[str, str]] = []
+        findings: list[dict[str, str]] = []
+        selection: list[dict[str, str]] = []
+        for index, candidate_id in enumerate(("C1", "C2"), start=1):
+            novelty.append(
+                {
+                    "candidate_id": candidate_id,
+                    "claim": "problem-specific mechanism adaptation",
+                    "search_queries": "verified query",
+                    "primary_sources": "doi:10.0000/example",
+                    "nearest_precedent": "verified baseline paper",
+                    "difference": "changes the constraint mechanism for this structure",
+                    "evidence_locator": "section 3",
+                    "novelty_class": "adaptation" if index == 1 else "combination",
+                    "metadata_status": "verified",
+                    "support_status": "supported",
+                    "accessed_at": "2026-08-08T00:00:00Z",
+                    "auditor": "tester",
+                    "decision": "continue",
+                    "notes": "fixture",
+                }
+            )
+            artifact = root / "innovation" / "results" / f"{candidate_id}.txt"
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text(f"verified experiment {candidate_id}\n", encoding="utf-8")
+            experiments.append(
+                {
+                    "candidate_id": candidate_id,
+                    "experiment_id": f"E{index}",
+                    "hypothesis": "candidate improves the target mechanism",
+                    "baseline": "strong baseline",
+                    "dataset_or_fixture": "small exact fixture",
+                    "command": "python support/code.py",
+                    "seed": "deterministic",
+                    "metric": "objective",
+                    "baseline_value": "10",
+                    "candidate_value": "9",
+                    "result_artifact": artifact.relative_to(root).as_posix(),
+                    "result_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                    "status": "verified",
+                    "reviewer": "tester",
+                    "decision": "pass",
+                    "notes": "fixture",
+                }
+            )
+            findings.append(
+                {
+                    "finding_id": f"F{index}",
+                    "candidate_id": candidate_id,
+                    "attack_surface": "complexity",
+                    "severity": "clear",
+                    "finding": "no open blocking issue",
+                    "evidence": artifact.relative_to(root).as_posix(),
+                    "repair_or_falsifier": "rerun exact fixture",
+                    "status": "clear",
+                    "reviewer": "tester",
+                    "notes": "fixture",
+                }
+            )
+            selection.append(
+                {
+                    "candidate_id": candidate_id,
+                    "rank": str(index),
+                    "decision": "promote",
+                    "problem_fit": "5",
+                    "structural_novelty": "4",
+                    "expected_gain": "4",
+                    "interpretability": "4",
+                    "implementation_feasibility": "4",
+                    "data_sufficiency": "5",
+                    "validation_strength": "4",
+                    "judge_readability": "4",
+                    "risks": "bounded fixture risk",
+                    "decision_evidence": artifact.relative_to(root).as_posix(),
+                    "reviewer": "tester",
+                    "notes": "fixture",
+                }
+            )
+        self.write_csv_rows(root / "innovation" / "novelty_audit.csv", novelty)
+        extra_artifact = root / "innovation" / "results" / "C3.txt"
+        extra_artifact.write_text("verified experiment C3\n", encoding="utf-8")
+        experiments.append(
+            {
+                "candidate_id": "C3",
+                "experiment_id": "E3",
+                "hypothesis": "third candidate survives a cheap screen",
+                "baseline": "strong baseline",
+                "dataset_or_fixture": "small exact fixture",
+                "command": "python support/code.py",
+                "seed": "deterministic",
+                "metric": "objective",
+                "baseline_value": "10",
+                "candidate_value": "9.5",
+                "result_artifact": extra_artifact.relative_to(root).as_posix(),
+                "result_sha256": hashlib.sha256(extra_artifact.read_bytes()).hexdigest(),
+                "status": "verified",
+                "reviewer": "tester",
+                "decision": "pass",
+                "notes": "fixture",
+            }
+        )
+        self.write_csv_rows(root / "innovation" / "feasibility_experiments.csv", experiments)
+        self.write_csv_rows(root / "innovation" / "critic_findings.csv", findings)
+        self.write_csv_rows(root / "innovation" / "selection.csv", selection)
+
     def test_initializer_creates_hard_controls(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -56,9 +200,23 @@ class WorkflowTests(unittest.TestCase):
                 "shared/task_board.csv",
                 "compliance/anonymity_terms.txt",
                 "submission/support_manifest.json",
+                "innovation/candidate_portfolio.csv",
+                "innovation/novelty_audit.csv",
+                "innovation/feasibility_experiments.csv",
+                "innovation/critic_findings.csv",
+                "innovation/selection.csv",
             )
             for relative in required:
                 self.assertTrue((root / relative).is_file(), relative)
+
+    def test_innovation_validator_blocks_empty_and_passes_complete_portfolio(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            self.assertEqual(validate_innovation_portfolio(root)["status"], "block")
+            self.complete_innovation_fixture(root)
+            report = validate_innovation_portfolio(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
 
     def test_task_board_rejects_dependency_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -142,6 +300,7 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
+            self.complete_innovation_fixture(root)
 
             problem = root / "inputs" / "original" / "problem.txt"
             problem.write_text("official problem", encoding="utf-8")

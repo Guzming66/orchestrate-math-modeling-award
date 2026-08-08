@@ -1,6 +1,6 @@
 ---
 name: orchestrate-math-modeling-award
-description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling competitions with official-rule verification, citation/data/result provenance audits, dependency-aware task control, CUMCM past-problem signal routing, excellent-paper benchmarking, independent model branches, blind cross-validation, reproducibility/statistical/uncertainty audits, direct-LaTeX production, anonymous support packaging, PDF visual QA, and fail-closed final submission gates. Use for 国赛、全国大学生数学建模竞赛、CUMCM、美赛、MCM/ICM, especially when selecting or splitting a contest problem, comparing models, verifying sources and results, red-teaming a solution, writing a LaTeX paper, or producing a submission package. Do not use for routine homework or an isolated coding question."
+description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling competitions with an Innovation Engine for structure-first multi-route search, cross-domain analogy, literature novelty auditing, cheap falsification experiments, blind critic/jury elimination, plus official-rule verification, provenance, independent model branches, cross-validation, reproducibility/statistical/uncertainty audits, direct-LaTeX production, and fail-closed submission gates. Use for 国赛、全国大学生数学建模竞赛、CUMCM、美赛、MCM/ICM, especially when searching for innovative modeling ideas, splitting subproblems, comparing models, verifying novelty/sources/results, red-teaming a solution, writing LaTeX, or producing a submission package. Do not use for routine homework or an isolated coding question."
 ---
 
 # 数学建模大奖总控
@@ -22,6 +22,8 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 
 凡准备把外部文献写入论文，在首次落稿前完整读取 [citation-integrity-audit.md](references/citation-integrity-audit.md)。
 
+凡进入 Stage 2–3 的创新方案搜索、跨领域迁移或模型选型，完整读取 [innovation-engine.md](references/innovation-engine.md)。
+
 ## 坚持底线
 
 - 把当届官方网站视为规则唯一权威；缓存、往届论文、博客和本 Skill 都不能覆盖当届原文。
@@ -36,7 +38,7 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 1. 识别赛事、年份、题号、截止时间、比赛阶段和现有文件。无法可靠判断时再询问用户。
 2. 运行：
 
-   `python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 3`
+   `python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 3 --innovation-mode <fast|standard|championship>`
 
 3. 将原题和原始附件放入 `inputs/original/`，保留原件和哈希，不覆盖、不重命名原件。
 4. 在 `shared/problem_contract.md` 冻结目标、约束、数据字典、评价指标、子问依赖、允许的外部数据和交付要求。
@@ -57,6 +59,20 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 - 风险：不可识别、数据泄漏、量纲错误、求解超时、外推和上游误差传播。
 
 再选择至少三条在假设或数学结构上不同的路线；不要只替换优化器或调参。若题目只能支持两条可信路线，使用两条主路线加一个强基线，不凑模型数量。
+
+## 运行 Innovation Engine
+
+完成题面结构图后、正式建模前，完整执行 [innovation-engine.md](references/innovation-engine.md)：
+
+1. 先抽取题目特殊结构、数据生成机制、子问依赖和可验证锚点，不先报算法名。
+2. 让彼此隔离的侦察任务从机理、统计/不确定性、优化/控制、图与时空、行为/博弈及跨领域类比等不同视角发散。
+3. 把每个创新单位写成“题目结构 + 机制改变 + 可验证增益”，用 `$citation-management` 核对最近先例和原始文献；不得声称世界首创。
+4. 对入围候选先做最便宜的基线对照、边界测试或单项消融，优先证伪而不是直接做完整模型。
+5. 冻结候选后让 Critic 攻击，再让独立 Jury 执行硬否决和八维排序；不以多数投票或复杂度代替证据。
+6. `standard/championship` 只晋级 2–3 条路线，至少包含一条 `safe` 和一条 `stretch`；其余保留淘汰证据。
+7. 运行 `python scripts/validate_innovation_portfolio.py <工作区>`。报告不是 `pass` 时，不得把候选映射到正式模型分支。
+
+沿用 `$mathmodel-skill` 的 `fast`、`standard`、`championship` 模式控制候选数和独立视角数。不要硬编码订阅价格、固定模型名或假定 Pro/Deep Research/多代理必然可用；有高计算模式时只在结构裁决、强红队和最终 Jury 上选择性使用，并以同题评测决定是否值得。
 
 ## 使用隔离科学环境
 
@@ -127,4 +143,4 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 
 ## 停止条件
 
-出现以下任一情况时不得宣称可提交：官方规则未核实；任务依赖未关闭；输入或结果未登记、哈希不符；核心结果无法独立复现；单位或统计假设矛盾；分支冲突未解释；文献不存在、标识符与题录不匹配、正文主张超出原文、撤稿或更正状态未处理；匿名词表未配置；支撑清单、归档扫描或八道门禁未通过；论文不是从 `paper/main.tex` 直接生成；最终 PDF 未逐页目视检查；`final_report.json` 不是 `pass`。
+出现以下任一情况时不得宣称可提交：官方规则未核实；Innovation Engine 未通过、创新最近先例未核实或入围方案仍有开放阻断项；任务依赖未关闭；输入或结果未登记、哈希不符；核心结果无法独立复现；单位或统计假设矛盾；分支冲突未解释；文献不存在、标识符与题录不匹配、正文主张超出原文、撤稿或更正状态未处理；匿名词表未配置；支撑清单、归档扫描或八道门禁未通过；论文不是从 `paper/main.tex` 直接生成；最终 PDF 未逐页目视检查；`final_report.json` 不是 `pass`。

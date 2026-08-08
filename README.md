@@ -1,10 +1,11 @@
 # 数学建模大奖总控 Skill
 
-面向全国大学生数学建模竞赛（CUMCM）和 MCM/ICM 的 Codex 总控 Skill。它负责核验当届官方规则、拆解多小问题、管理依赖关系、并行比较独立模型、审计数据/文献/结果来源、组织交叉验证，并以 LaTeX 为论文唯一真源完成提交前门禁。
+面向全国大学生数学建模竞赛（CUMCM）和 MCM/ICM 的 Codex 总控 Skill。它负责创新方案搜索、核验当届官方规则、拆解多小问题、管理依赖关系、并行比较独立模型、审计数据/文献/结果来源、组织交叉验证，并以 LaTeX 为论文唯一真源完成提交前门禁。
 
 ## 核心能力
 
 - 按依赖关系拆分赛题、小题和模型分支，避免不同任务互相污染。
+- Innovation Engine 从题目特殊结构出发，执行多路线发散、跨领域类比、最近文献核验、便宜证伪实验、盲红队和评委淘汰。
 - 用统一台账管理官方规则、原始数据、关键结论、引用和结果哈希。
 - 对候选模型执行独立建模、盲交叉验证、统计与不确定性审核。
 - 直接维护 CUMCM 与 MCM/ICM LaTeX 工程，不经过 Word 格式转换。
@@ -27,7 +28,7 @@
 在 Codex 中使用 `$skill-installer` 从上述 GitHub 仓库安装，然后明确调用：
 
 ```text
-使用 $orchestrate-math-modeling-award 初始化这道国赛题，先核验当届官方规则，再按小题和模型分支建立任务板；论文只使用 LaTeX。
+使用 $orchestrate-math-modeling-award 初始化这道国赛题，启用 championship Innovation Engine；先核验当届官方规则，再按小题和模型分支建立任务板；论文只使用 LaTeX。
 ```
 
 也可以手动把整个仓库复制到 Codex 的 Skills 目录，保持 `SKILL.md`、`scripts/`、`references/`、`assets/` 和 `agents/` 的相对位置不变。
@@ -44,7 +45,8 @@
 ## 快速开始
 
 ```powershell
-python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 3
+python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 3 --innovation-mode championship
+python scripts/validate_innovation_portfolio.py <工作区>
 python scripts/build_latex.py <工作区>/paper --competition CUMCM --mode draft
 python scripts/finalize_submission.py <工作区>
 ```

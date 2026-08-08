@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 6
+WORKFLOW_VERSION = 7
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -26,6 +26,14 @@ def write_json_if_missing(path: Path, value: object) -> None:
             json.dumps(value, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+
+
+def write_csv_header_if_missing(path: Path, fields: list[str]) -> None:
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        csv.writer(handle).writerow(fields)
 
 
 def copy_tree_without_overwrite(source: Path, destination: Path) -> None:
@@ -61,7 +69,7 @@ def check_existing_manifest(path: Path, expected: dict[str, object]) -> None:
     if not path.exists():
         return
     current = json.loads(path.read_text(encoding="utf-8"))
-    keys = ("competition", "year", "problem", "branches")
+    keys = ("competition", "year", "problem", "branches", "innovation_mode")
     conflicts = [key for key in keys if current.get(key) != expected.get(key)]
     if conflicts:
         joined = ", ".join(conflicts)
@@ -170,6 +178,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "year": args.year,
         "problem": args.problem,
         "branches": branch_names,
+        "innovation_mode": args.innovation_mode,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "initialized",
         "paper_pipeline": "direct-latex",
@@ -193,10 +202,12 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "audits/reproduction",
         "audits/red-team",
         "audits/latex",
+        "audits/innovation",
         "audits/submission",
         "environment",
         "submission",
         "synthesis",
+        "innovation",
         "paper",
         "compliance",
         "logs",
@@ -242,6 +253,47 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "- Why these routes are structurally different:\n"
         "- Letter-based stereotype explicitly rejected:\n",
     )
+    write_text_if_missing(
+        root / "innovation" / "structure_map.md",
+        "# Innovation structure map\n\n"
+        "- Subproblem dependency graph:\n- Mathematical objects:\n- Data-generating mechanism:\n"
+        "- Conservation, network, spatial, temporal, control or game structure:\n"
+        "- Identifiability and uncertainty:\n- Validation anchors:\n"
+        "- Structure gaps that may justify a mechanism change:\n",
+    )
+    write_text_if_missing(
+        root / "innovation" / "jury_rationale.md",
+        "# Innovation jury rationale\n\n- Hard vetoes applied:\n- Promoted safe route:\n- Promoted stretch route:\n- Rejected routes and evidence:\n",
+    )
+    innovation_headers = {
+        "candidate_portfolio.csv": [
+            "candidate_id", "scout_id", "origin_lens", "problem_structure", "mechanism_change",
+            "innovation_unit", "mechanism_family", "mathematical_formulation", "baseline",
+            "cross_domain_source", "data_needs", "validation_plan", "cheap_falsifier",
+            "failure_condition", "complexity_justification", "risk_role", "status", "notes",
+        ],
+        "novelty_audit.csv": [
+            "candidate_id", "claim", "search_queries", "primary_sources", "nearest_precedent",
+            "difference", "evidence_locator", "novelty_class", "metadata_status", "support_status",
+            "accessed_at", "auditor", "decision", "notes",
+        ],
+        "feasibility_experiments.csv": [
+            "candidate_id", "experiment_id", "hypothesis", "baseline", "dataset_or_fixture",
+            "command", "seed", "metric", "baseline_value", "candidate_value", "result_artifact",
+            "result_sha256", "status", "reviewer", "decision", "notes",
+        ],
+        "critic_findings.csv": [
+            "finding_id", "candidate_id", "attack_surface", "severity", "finding", "evidence",
+            "repair_or_falsifier", "status", "reviewer", "notes",
+        ],
+        "selection.csv": [
+            "candidate_id", "rank", "decision", "problem_fit", "structural_novelty", "expected_gain",
+            "interpretability", "implementation_feasibility", "data_sufficiency",
+            "validation_strength", "judge_readability", "risks", "decision_evidence", "reviewer", "notes",
+        ],
+    }
+    for filename, fields in innovation_headers.items():
+        write_csv_header_if_missing(root / "innovation" / filename, fields)
     official_sources: dict[str, object] = {
         "competition": args.competition,
         "status": "must_reverify_at_stage_0_8_9",
@@ -402,10 +454,15 @@ def create_workspace(args: argparse.Namespace) -> Path:
         task_rows = [
             ["rule-audit", "all", "rules", "", "", "audits/rules", "", "", "manual official-rule review", "pending", "true", "verified rule snapshot", ""],
             ["problem-route", "all", "routing", "rule-audit", "", "shared/problem_route.md", "", "", "two routes plus a strong baseline", "pending", "true", "frozen problem route", ""],
+            ["innovation-divergence", "all", "innovation", "problem-route", "", "innovation/candidate_portfolio.csv", "", "", "strong baseline plus structurally distinct routes", "pending", "true", "structure map and candidate portfolio", ""],
+            ["innovation-novelty", "all", "citations", "innovation-divergence", "", "innovation/novelty_audit.csv", "", "", "downgrade novelty claims to unverified", "pending", "true", "verified nearest-precedent audit", ""],
+            ["innovation-experiments", "all", "experiment", "innovation-novelty", "", "innovation/feasibility_experiments.csv", "", "", "retain reproducible baseline", "pending", "true", "cheap falsification experiments", ""],
+            ["innovation-critic", "all", "red-team", "innovation-experiments", "", "innovation/critic_findings.csv", "", "", "reject unresolved complex routes", "pending", "true", "blind critic findings", ""],
+            ["innovation-selection", "all", "jury", "innovation-critic", "", "innovation/selection.csv", "", "", "promote safe baseline route", "pending", "true", "2-3 promoted routes and jury rationale", ""],
         ]
         for task_id in model_task_ids:
             task_rows.append(
-                [task_id, "assigned", "model", "problem-route", "", f"branches/{task_id}", "", "", "baseline branch", "pending", "true", "model, code, results and branch summary", ""]
+                [task_id, "assigned", "model", "innovation-selection", "", f"branches/{task_id}", "", "", "baseline branch", "pending", "true", "model, code, results and branch summary", ""]
             )
         joined_models = ";".join(model_task_ids)
         task_rows.extend(
@@ -482,6 +539,9 @@ def create_workspace(args: argparse.Namespace) -> Path:
                     "problem_fit",
                     "assumption_risk",
                     "data_support",
+                    "structural_novelty",
+                    "novelty_evidence",
+                    "falsification_status",
                     "baseline_gain",
                     "diagnostic_quality",
                     "uncertainty_stability",
@@ -513,6 +573,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--year", required=True, type=int)
     parser.add_argument("--problem", required=True)
     parser.add_argument("--branches", type=int, default=3, choices=range(2, 9))
+    parser.add_argument("--innovation-mode", choices=("fast", "standard", "championship"), default="standard")
     return parser.parse_args()
 
 
