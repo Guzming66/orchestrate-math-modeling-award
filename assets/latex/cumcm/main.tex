@@ -1,0 +1,67 @@
+% Direct-LaTeX CUMCM template. MIT-derived from mathmodel-skill v6.1.
+\documentclass[UTF8,12pt,a4paper,fontset=fandol]{ctexart}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{graphicx,float,booktabs,longtable,multirow}
+\usepackage{xcolor,listings,caption,subcaption,enumitem}
+\usepackage{hyperref,url,cite}
+
+\graphicspath{{figures/}}
+\hypersetup{unicode=true,hidelinks,pdfauthor={},pdfsubject={},pdfkeywords={}}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0pt}
+\linespread{1.25}
+\lstset{basicstyle=\small\ttfamily,breaklines=true,frame=single,numbers=left,
+  numberstyle=\tiny,showstringspaces=false,columns=fullflexible,keepspaces=true}
+
+\newcommand{\PaperTitle}{}
+\newcommand{\PaperKeywords}{}
+\newif\ifIncludeAIUsageStatement
+\input{generated/metadata.tex}
+\hypersetup{pdftitle={\PaperTitle}}
+
+\newcounter{mathawardbodystartpage}
+\newcounter{mathawardbodypages}
+
+\begin{document}
+\pagenumbering{arabic}
+\pagestyle{plain}
+\thispagestyle{plain}
+
+\begin{center}
+  {\zihao{3}\bfseries \PaperTitle\par}
+  \vspace{1em}
+  {\zihao{4}\bfseries 摘要}
+\end{center}
+\input{sections/00_abstract.tex}
+\par\noindent\textbf{关键词：}\PaperKeywords
+
+\clearpage
+\ifnum\value{page}=2\relax\else
+  \PackageError{mathaward-cumcm}{Abstract must fit on page 1}{Shorten the abstract.}
+\fi
+\setcounter{mathawardbodystartpage}{\value{page}}
+
+\input{sections/01_problem_restatement.tex}
+\input{sections/02_problem_analysis.tex}
+\input{sections/03_assumptions.tex}
+\input{sections/04_notation.tex}
+\input{sections/05_models.tex}
+\input{sections/06_robustness.tex}
+\input{sections/07_evaluation.tex}
+\input{sections/08_conclusion.tex}
+\ifIncludeAIUsageStatement\input{sections/09_ai_statement.tex}\fi
+\IfFileExists{generated/bibliography.tex}{\input{generated/bibliography.tex}}{}
+
+\clearpage
+\setcounter{mathawardbodypages}{\numexpr\value{page}-\value{mathawardbodystartpage}\relax}
+\typeout{MATHAWARD:CUMCM_BODY_PAGES=\arabic{mathawardbodypages}}
+\ifnum\value{mathawardbodypages}>30\relax
+  \PackageError{mathaward-cumcm}{Body exceeds 30 pages}{Shorten the main text.}
+\fi
+
+\appendix
+\input{sections/90_appendix.tex}
+\end{document}

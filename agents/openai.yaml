@@ -1,0 +1,4 @@
+interface:
+  display_name: "数学建模大奖总控"
+  short_description: "国赛/美赛赛题路由、交叉验证、合规与直接 LaTeX 总控"
+  default_prompt: "使用 $orchestrate-math-modeling-award 核验国赛规则和题型，拆分异质模型并交叉验证，直接生成可提交的 LaTeX 论文。"

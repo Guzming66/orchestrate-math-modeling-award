@@ -1,0 +1,70 @@
+% Direct-LaTeX MCM/ICM template. MIT-derived from mathmodel-skill v6.1.
+\documentclass[12pt,letterpaper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{graphicx,float,booktabs,longtable,multirow}
+\usepackage{xcolor,listings,caption,subcaption,enumitem}
+\usepackage{hyperref,url,cite}
+\usepackage{fancyhdr}
+
+\graphicspath{{figures/}}
+\hypersetup{hidelinks,pdfauthor={},pdfsubject={},pdfkeywords={}}
+\lstset{basicstyle=\small\ttfamily,breaklines=true,frame=single,numbers=left,
+  numberstyle=\tiny,showstringspaces=false}
+
+\newcommand{\PaperTitle}{}
+\newcommand{\PaperKeywords}{}
+\newcommand{\ProblemCode}{}
+\newcommand{\ControlNumber}{}
+\newif\ifIncludeAIReport
+\input{generated/metadata.tex}
+\hypersetup{pdftitle={\PaperTitle}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Team \#\ControlNumber}
+\fancyhead[R]{Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14.5pt}
+\newcounter{mathawardmainsolutionpages}
+
+\begin{document}
+\thispagestyle{fancy}
+\begin{center}
+  \textbf{\Large MCM/ICM Summary Sheet}\\[0.6cm]
+  {\large Problem Chosen: \textbf{\ProblemCode}}\hfill
+  {\large Team Control Number: \textbf{\ControlNumber}}\\[0.7cm]
+  {\LARGE\textbf{\PaperTitle}}
+\end{center}
+\section*{Summary}
+\input{sections/00_summary.tex}
+\par\medskip\noindent\textbf{Keywords:} \PaperKeywords
+\clearpage
+
+\input{sections/01_problem_restatement.tex}
+\input{sections/02_problem_analysis.tex}
+\input{sections/03_assumptions.tex}
+\input{sections/04_notation.tex}
+\input{sections/05_models.tex}
+\input{sections/06_robustness.tex}
+\input{sections/07_evaluation.tex}
+\input{sections/08_conclusion.tex}
+\input{sections/09_required_deliverable.tex}
+\IfFileExists{generated/bibliography.tex}{\input{generated/bibliography.tex}}{}
+\appendix
+\input{sections/90_appendix.tex}
+
+\clearpage
+\setcounter{mathawardmainsolutionpages}{\value{page}}
+\addtocounter{mathawardmainsolutionpages}{-1}
+\typeout{MATHAWARD:MCM_MAIN_PAGES=\arabic{mathawardmainsolutionpages}}
+\ifnum\value{mathawardmainsolutionpages}>25\relax
+  \PackageError{mathaward-mcm}{Main solution exceeds 25 pages}{Shorten the solution.}
+\fi
+
+\ifIncludeAIReport
+  \section*{Report on Use of AI}
+  \input{sections/99_ai_report.tex}
+\fi
+\end{document}
