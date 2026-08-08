@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 
@@ -127,6 +128,16 @@ class WorkflowTests(unittest.TestCase):
             errors = check_cumcm_ai_compliance(root, {"competition": "CUMCM", "year": "2026"})
             self.assertTrue(any("AI usage statement" in item for item in errors))
 
+    def test_cumcm_ai_gate_ignores_commented_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            (root / "paper" / "generated" / "metadata.tex").write_text("% \\IncludeAIUsageStatementtrue\n\\IncludeAIUsageStatementfalse\n", encoding="utf-8")
+            (root / "paper" / "sections" / "09_ai_statement.tex").write_text("% 本参赛队在竞赛过程中使用了AI工具\n本参赛队在竞赛过程中未使用任何AI工具。\n", encoding="utf-8")
+            errors = check_cumcm_ai_compliance(root, {"competition": "CUMCM", "year": "2026"})
+            self.assertTrue(any("not enabled" in item for item in errors))
+            self.assertTrue(any("truthfully declare" in item for item in errors))
+
     def test_finalizer_passes_complete_cumcm_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -209,11 +220,13 @@ class WorkflowTests(unittest.TestCase):
             support.parent.mkdir()
             support.write_text("print(42)\n", encoding="utf-8")
             (root / "compliance" / "anonymity_terms.txt").write_text("Test University\nReal Name\n", encoding="utf-8")
-            (root / "submission" / "support_manifest.json").write_text(json.dumps({"archive_name": "support.zip", "files": ["support/code.py", "paper/build/ai_usage_details.pdf"]}), encoding="utf-8")
+            (root / "submission" / "support_manifest.json").write_text(json.dumps({"archive_name": "support.zip", "files": ["support/code.py", "paper/build/AI工具使用详情.pdf"]}), encoding="utf-8")
 
             report = finalize(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             self.assertTrue((root / "submission" / "submission_manifest.json").is_file())
+            with zipfile.ZipFile(root / "submission" / "support.zip") as archive:
+                self.assertIn("AI工具使用详情.pdf", archive.namelist())
 
     @unittest.skipUnless(
         all(shutil.which(name) for name in ("latexmk", "xelatex", "pdflatex", "pdfinfo")),

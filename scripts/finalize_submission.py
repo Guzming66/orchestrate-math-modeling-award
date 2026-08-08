@@ -9,12 +9,14 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from package_submission import package_workspace
+from build_latex import strip_tex_comments
 from snapshot_environment import snapshot
 from validate_task_board import validate_task_board
 
@@ -260,17 +262,20 @@ def check_cumcm_ai_compliance(workspace: Path, manifest: dict[str, object]) -> l
         return []
     errors: list[str] = []
     paper = workspace / "paper"
-    metadata = (paper / "generated" / "metadata.tex").read_text(encoding="utf-8", errors="replace")
-    if r"\IncludeAIUsageStatementtrue" not in metadata:
+    metadata_path = paper / "generated" / "metadata.tex"
+    metadata = strip_tex_comments(metadata_path.read_text(encoding="utf-8", errors="replace")) if metadata_path.is_file() else ""
+    switches = re.findall(r"\\IncludeAIUsageStatement(true|false)\b", metadata)
+    if not switches or switches[-1] != "true":
         errors.append("CUMCM 2026+: AI usage statement is not enabled")
 
     statement_path = paper / "sections" / "09_ai_statement.tex"
-    statement = statement_path.read_text(encoding="utf-8", errors="replace") if statement_path.is_file() else ""
+    statement = strip_tex_comments(statement_path.read_text(encoding="utf-8", errors="replace")) if statement_path.is_file() else ""
     normalized = re.sub(r"\s+", "", statement)
     if "本参赛队在竞赛过程中使用了AI工具" not in normalized:
         errors.append("CUMCM 2026+: AI statement must truthfully declare use of this Skill/Codex")
 
-    main = (paper / "main.tex").read_text(encoding="utf-8", errors="replace")
+    main_path = paper / "main.tex"
+    main = strip_tex_comments(main_path.read_text(encoding="utf-8", errors="replace")) if main_path.is_file() else ""
     statement_position = main.find(r"\ifIncludeAIUsageStatement\input")
     bibliography_position = main.find("generated/bibliography.tex")
     if statement_position < 0 or bibliography_position < 0 or statement_position > bibliography_position:
@@ -279,8 +284,8 @@ def check_cumcm_ai_compliance(workspace: Path, manifest: dict[str, object]) -> l
     support_manifest = load_json(workspace / "submission" / "support_manifest.json")
     files = support_manifest.get("files")
     normalized_files = {str(item).replace("\\", "/") for item in files} if isinstance(files, list) else set()
-    if "paper/build/ai_usage_details.pdf" not in normalized_files:
-        errors.append("CUMCM 2026+: paper/build/ai_usage_details.pdf is missing from support_manifest.json")
+    if "paper/build/AI工具使用详情.pdf" not in normalized_files:
+        errors.append("CUMCM 2026+: paper/build/AI工具使用详情.pdf is missing from support_manifest.json")
     return errors
 
 
@@ -381,6 +386,16 @@ def finalize(workspace: Path) -> dict[str, object]:
         if ai_exit != 0 or ai_details_report.get("status") != "pass":
             errors.append("CUMCM AI usage details LaTeX build failed")
             errors.extend(str(item) for item in ai_details_report.get("errors", []))
+        else:
+            source = Path(str(ai_details_report.get("pdf", "")))
+            target = workspace / "paper" / "build" / "AI工具使用详情.pdf"
+            try:
+                shutil.copy2(source, target)
+            except OSError as exc:
+                errors.append(f"cannot create AI工具使用详情.pdf: {exc}")
+            else:
+                ai_details_report["pdf"] = str(target)
+                ai_details_report["sha256"] = sha256_file(target)
 
     package_report: dict[str, object] = {"status": "not_applicable"}
     if competition == "CUMCM":

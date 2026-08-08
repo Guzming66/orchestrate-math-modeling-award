@@ -245,7 +245,8 @@ def package_workspace(
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for relative, source in sorted(resolved):
-                info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
+                archive_member = "AI工具使用详情.pdf" if relative == "paper/build/AI工具使用详情.pdf" else relative
+                info = zipfile.ZipInfo(archive_member, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o644 << 16
                 archive.writestr(info, source.read_bytes())

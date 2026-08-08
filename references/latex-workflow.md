@@ -84,7 +84,7 @@ python <citation-management>/scripts/validate_citations.py <workspace>/paper/ref
 python <skill>/scripts/build_latex.py <workspace>/paper --competition CUMCM --main ai_usage_details.tex --mode submission
 ```
 
-按当届要求命名、放置和提交生成的 `paper/build/ai_usage_details.pdf`。美赛的相应内容可写入 `paper/sections/99_ai_report.tex`，由主论文按当届版面规则编译。
+最终器会把直编结果命名为 `paper/build/AI工具使用详情.pdf`，并要求支撑清单包含它；打包时该文件位于压缩包根目录。美赛的相应内容可写入 `paper/sections/99_ai_report.tex`，由主论文按当届版面规则编译。
 
 ## CUMCM 附录与支撑材料同步
 
