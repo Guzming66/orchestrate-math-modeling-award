@@ -5,7 +5,7 @@
 1. 从正文提取需要外部证据的主张，给每条分配 `claim_id`。
 2. 找到原始论文、官方报告、标准或数据文档；搜索结果页、聚合平台和 AI 回答只用于发现。
 3. 用 `$citation-management` 核验 BibTeX 语法、重复项和 DOI 可解析性，再人工比对权威页面中的题名、作者、年份、载体和标识符。
-4. 阅读原文相关段落及其上下文，把页码、章节、公式、表格或图号写入 `audits/citations/citation_ledger.csv`。
+4. 阅读原文相关段落及其上下文，把页码、章节、公式、表格或图号写入 `audits/citations/citation_ledger.csv`；同时保存原文/官方题录快照或许可保存的摘录，并记录 `artifact_path`、`artifact_sha256`、`verification_command` 与 `checked_at`。
 5. 检查原文是否真的支持正文措辞，并核对适用对象、数据范围、假设、单位和限制。
 6. 检查是否存在正式发表版本、更正、撤稿、关注声明或新版标准；完成后再允许引用进入正文。
 
@@ -55,4 +55,4 @@ python <citation-management>/scripts/validate_citations.py <workspace>/paper/ref
 - `major`：关键方法只引二手来源；预印本已有正式版本却未处理；更正或版本差异可能改变结论；数值的单位、样本或适用范围不一致。
 - `minor`：不影响身份和含义的格式、缩写、页码样式或大小写问题。
 
-只有 `metadata_status=verified`、`support_status=supported` 且撤稿/更正状态已检查的记录才能进入终稿。无法核验时删除引用或把正文改成明确的未知与限制，不用“可能正确”放行。
+只有 `metadata_status=verified`、`support_status=supported`、撤稿/更正状态已检查且证据 artifact 存在并与哈希一致的记录才能进入终稿。无法核验时删除引用或把正文改成明确的未知与限制，不用“可能正确”放行。

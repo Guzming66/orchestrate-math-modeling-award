@@ -18,9 +18,6 @@ ENGINE_BY_COMPETITION = {
     "MCM": "pdflatex",
     "ICM": "pdflatex",
 }
-CUMCM_MAX_PDF_BYTES = 20_000_000
-A4_WIDTH_POINTS = 595.276
-A4_HEIGHT_POINTS = 841.89
 PLACEHOLDERS = ("DRAFT TITLE", "DRAFT KEYWORDS", "DRAFT CONTENT", "0000000")
 BLOCKING_LOG_PATTERNS = (
     (r"^! LaTeX Error:", "LaTeX error"),
@@ -136,21 +133,15 @@ def scan_sources(
     if mode != "submission":
         return []
     errors: list[str] = []
-    cumcm_source = ""
     for path in paper_dir.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in {".tex", ".bib"}:
             continue
         if "build" in path.relative_to(paper_dir).parts:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        if competition == "CUMCM":
-            cumcm_source += "\n" + strip_tex_comments(text)
         for placeholder in PLACEHOLDERS:
             if placeholder in text:
                 errors.append(f"placeholder '{placeholder}' remains in {path.relative_to(paper_dir)}")
-    if competition == "CUMCM" and main_name.lower() == "main.tex":
-        if re.search(r"\\tableofcontents\b", cumcm_source):
-            errors.append("CUMCM electronic paper must not contain a table of contents")
     return errors
 
 
@@ -263,6 +254,7 @@ def main() -> int:
 
     pdf_path = build_dir / f"{main_path.stem}.pdf"
     pages: int | None = None
+    front_matter_pages: int | None = None
     body_pages: int | None = None
     page_width_points: float | None = None
     page_height_points: float | None = None
@@ -287,31 +279,12 @@ def main() -> int:
     else:
         errors.append("compiled PDF is missing")
 
-    body_match = re.search(r"MATHAWARD:CUMCM_BODY_PAGES=(\d+)", log_text)
+    front_match = re.search(r"MATHAWARD:FRONT_MATTER_PAGES=(\d+)", log_text)
+    if front_match:
+        front_matter_pages = int(front_match.group(1))
+    body_match = re.search(r"MATHAWARD:(?:CUMCM_BODY|MCM_MAIN)_PAGES=(\d+)", log_text)
     if body_match:
         body_pages = int(body_match.group(1))
-
-    if args.mode == "submission" and args.competition == "CUMCM" and pdf_path.is_file():
-        if page_width_points is None or page_height_points is None:
-            errors.append("unable to verify CUMCM A4 page size")
-        elif (
-            abs(page_width_points - A4_WIDTH_POINTS) > 2.0
-            or abs(page_height_points - A4_HEIGHT_POINTS) > 2.0
-        ):
-            errors.append(
-                f"CUMCM PDF is not portrait A4: {page_width_points:.2f} x {page_height_points:.2f} pt"
-            )
-        if pdf_author and pdf_author.strip():
-            errors.append("CUMCM PDF Author metadata is not anonymous")
-        if main_path.name.lower() == "main.tex":
-            if file_size_bytes is not None and file_size_bytes > CUMCM_MAX_PDF_BYTES:
-                errors.append(
-                    f"CUMCM paper exceeds 20 MB: {file_size_bytes} bytes"
-                )
-            if body_pages is None:
-                errors.append("CUMCM body-page marker is missing; use the supplied main.tex template")
-            elif body_pages > 30:
-                errors.append(f"CUMCM body exceeds 30 pages: {body_pages}")
 
     report = {
         "status": "pass" if not errors else "block",
@@ -321,6 +294,7 @@ def main() -> int:
         "source": str(main_path),
         "pdf": str(pdf_path) if pdf_path.exists() else None,
         "pages": pages,
+        "front_matter_pages": front_matter_pages,
         "body_pages": body_pages,
         "page_width_points": page_width_points,
         "page_height_points": page_height_points,

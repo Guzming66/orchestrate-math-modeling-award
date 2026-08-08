@@ -6,7 +6,7 @@
 2. 国赛规则审计
 3. 文献真实性审计
 4. 题面信号路由
-5. Innovation Engine 独立任务
+5. Innovation Claim Engine 独立任务
 6. 独立建模分支
 7. 数据审计
 8. 统计审计
@@ -35,7 +35,9 @@
 
 任务说明：只核对当届规则，不参与选题或模型判断。
 
-从全国组委会入口重新核对当届参赛规则、论文格式、报名和参赛须知、赛区补充要求及题面更正。记录 URL、访问时间、页面/PDF 版本和哈希。规则未核实即列为阻断项。
+从全国组委会入口重新核对当届参赛规则、论文格式、报名和参赛须知、赛区补充要求及题面更正。保存官方页面/PDF 快照，记录 URL、访问时间、检查步骤和哈希，填写 versioned competition profile。规则未核实即列为阻断项；不得按年份继承要求。
+
+Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做明确标注为 `unverified exploratory` 的草探；`innovation-evidence`、claim promotion、正式模型裁决和论文主张必须依赖 `profile-audit` 完成。
 
 ## 文献真实性审计
 
@@ -47,13 +49,13 @@
 
 任务说明：只读取官方题面和原始附件，不看其他分支。不得按 A/B/C/D/E 字母预设题型。
 
-输出 `shared/problem_route.md` 的候选草案：数学对象、任务动词、约束结构、数据机制、可验证锚点、赛程风险、三条异质路线和一个强基线。每条路线说明关键假设、最小闭环、预计计算成本、失败条件及与其他路线的结构差异。
+输出 `shared/problem_route.md`：数学对象、任务动词、约束结构、数据机制、可验证锚点、赛程风险和一个强基线。只在能检验关键假设或降低风险时增加替代路线，并说明必要性；路线数量不是创新指标。
 
-## Innovation Engine 独立任务
+## Innovation Claim Engine 独立任务
 
-完整读取 [innovation-engine.md](innovation-engine.md)，按 Wave 1–3 分配 Structure Mapper、互相隔离的 Route Scouts、Cross-domain Analogist、Literature Auditor、Experimenter、Critic 和 Jury。每个任务只写自己负责的 `innovation/` 文件；冻结前不得读取其他侦察路线或主任务偏好。
+完整读取 [innovation-engine.md](innovation-engine.md)，按 Wave 1–4 分配 Structure Mapper、Strong Baseline Builder、Baseline Failure Mapper、axis scouts、可选 Cross-domain Analogist、Literature Auditor、Experimenter、Critic 和 Jury。每个任务只写负责的 artifact；冻结前不读取其他 scout 或主任务偏好。
 
-所有候选必须明确题目特殊结构、传统基线、机制改变、跨域来源（如有）、便宜证伪实验、复杂度必要性和失败条件。Literature Auditor 使用 `$citation-management` 核验最近先例与原文支持；Experimenter 保存命令、种子、结果文件和哈希；Critic 与 Jury 不得由候选作者兼任。只有 `validate_innovation_portfolio.py` 通过后才启动正式建模分支。
+所有晋级 claim 必须形成 `Structure → Baseline Failure → Minimal Change → Gain → Nearest Precedent/Difference`。Literature Auditor 使用 `$citation-management`；Experimenter 保存 falsification、改变开/关 ablation、命令、种子、artifact 和哈希；Critic/Jury 不得由主张作者兼任。候选数、axis、scout、类比和 safe/stretch 不作硬门禁。
 
 ## 独立建模分支
 
@@ -63,7 +65,7 @@
 
 1. 用自己的话重述问题和评价目标。
 2. 列出假设，并说明每项假设如何影响结论。
-3. 至少提出一个基线和一个主模型；解释模型选择而非罗列算法。
+3. 从一个强基线开始；只有证据需要时才增加主模型组件或替代模型。
 4. 给出变量、单位、目标、约束、算法和复杂度。
 5. 提供可运行代码、固定随机种子和结果生成步骤。
 6. 执行适合该路线的验证、诊断和敏感性分析。
@@ -116,12 +118,12 @@
 
 任务说明：只使用通过门禁的结果，不重新计算或发明数字。
 
-建立论点—证据—代码—图表追踪表；统一符号、单位、有效数字和术语。只编辑 `paper/main.tex`、`paper/generated/metadata.tex`、`paper/references.bib` 和明确分配的 `.tex` 章节。只合并通过文献真实性门禁的引用；压缩重复内容，但保留关键假设、验证、敏感性、局限性和当届明确要求的声明。每次合并后直接编译 LaTeX。
+建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 映射到 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留假设、验证、敏感性、局限和当届声明。每次合并后直接编译 LaTeX。
 
 ## LaTeX 与提交包审计
 
 任务说明：不修改论证，只检查 LaTeX 工程和最终 PDF。
 
-从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置、页数、A4、文件大小、匿名信息和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
+从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
 
-对 CUMCM 再核对：电子论文首页为摘要、无目录、正文不超过 30 页、附录列出支撑文件并包含完整可运行代码；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有论文、支撑 ZIP、所有哈希、匿名/凭据扫描和 G0—G7 同时通过才允许放行。
+按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有论文、profile 要求的支撑包、所有哈希、匿名/凭据扫描和 G0—G7 同时通过才允许放行。

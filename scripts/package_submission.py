@@ -180,7 +180,7 @@ def package_workspace(
     workspace: Path,
     manifest_path: Path | None = None,
     paper_path: Path | None = None,
-    max_bytes: int = 20_000_000,
+    max_bytes: int | None = None,
     require_paper: bool = False,
 ) -> dict[str, object]:
     manifest_path = manifest_path or workspace / "submission" / "support_manifest.json"
@@ -207,14 +207,30 @@ def package_workspace(
         errors.append("archive_name must be a simple .zip filename")
         archive_name = "support_materials.zip"
     archive_path = workspace / "submission" / archive_name
-    resolved: list[tuple[str, Path]] = []
-    seen: set[str] = set()
+    resolved: list[tuple[str, str, Path]] = []
+    seen_sources: set[str] = set()
+    seen_members: set[str] = set()
     for raw in entries:
-        relative = str(raw).replace("\\", "/").strip()
-        if not relative or relative in seen:
-            errors.append(f"invalid or duplicate manifest entry: {relative!r}")
+        if isinstance(raw, dict):
+            relative = str(raw.get("source", "")).replace("\\", "/").strip()
+            archive_member = str(raw.get("archive_path", "")).replace("\\", "/").strip()
+        else:
+            relative = str(raw).replace("\\", "/").strip()
+            archive_member = relative
+        if not relative or relative in seen_sources:
+            errors.append(f"invalid or duplicate manifest source: {relative!r}")
             continue
-        seen.add(relative)
+        if (
+            not archive_member
+            or archive_member in seen_members
+            or Path(archive_member).is_absolute()
+            or ".." in Path(archive_member).parts
+            or archive_member.startswith("/")
+        ):
+            errors.append(f"invalid or duplicate archive_path: {archive_member!r}")
+            continue
+        seen_sources.add(relative)
+        seen_members.add(archive_member)
         try:
             source = resolve_member(workspace, relative)
         except ValueError as exc:
@@ -229,8 +245,15 @@ def package_workspace(
         file_errors, file_warnings = scan_file(source, relative, terms)
         errors.extend(file_errors)
         warnings.extend(file_warnings)
-        resolved.append((relative, source))
-        files_report.append({"path": relative, "size_bytes": source.stat().st_size, "sha256": sha256_file(source)})
+        resolved.append((archive_member, relative, source))
+        files_report.append(
+            {
+                "source": relative,
+                "archive_path": archive_member,
+                "size_bytes": source.stat().st_size,
+                "sha256": sha256_file(source),
+            }
+        )
 
     if paper_path.is_file():
         paper_errors, paper_warnings = scan_file(paper_path, "paper/main.pdf", terms)
@@ -244,15 +267,14 @@ def package_workspace(
     if not errors:
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-            for relative, source in sorted(resolved):
-                archive_member = "AI工具使用详情.pdf" if relative == "paper/build/AI工具使用详情.pdf" else relative
+            for archive_member, relative, source in sorted(resolved):
                 info = zipfile.ZipInfo(archive_member, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o644 << 16
                 archive.writestr(info, source.read_bytes())
         archive_size = archive_path.stat().st_size
         archive_sha256 = sha256_file(archive_path)
-        if archive_size > max_bytes:
+        if max_bytes is not None and archive_size > max_bytes:
             errors.append(f"support archive exceeds {max_bytes} bytes")
 
     report = {
@@ -276,7 +298,7 @@ def main() -> int:
     parser.add_argument("workspace")
     parser.add_argument("--manifest")
     parser.add_argument("--paper")
-    parser.add_argument("--max-bytes", type=int, default=20_000_000)
+    parser.add_argument("--max-bytes", type=int)
     parser.add_argument("--require-paper", action="store_true")
     args = parser.parse_args()
     workspace = Path(args.workspace).expanduser().resolve()

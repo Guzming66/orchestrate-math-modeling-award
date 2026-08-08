@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 7
+WORKFLOW_VERSION = 8
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -69,6 +69,10 @@ def check_existing_manifest(path: Path, expected: dict[str, object]) -> None:
     if not path.exists():
         return
     current = json.loads(path.read_text(encoding="utf-8"))
+    if current.get("workflow_version") != WORKFLOW_VERSION:
+        raise SystemExit(
+            "Existing workspace uses another workflow version; run migrate_workspace.py first."
+        )
     keys = ("competition", "year", "problem", "branches", "innovation_mode")
     conflicts = [key for key in keys if current.get(key) != expected.get(key)]
     if conflicts:
@@ -143,7 +147,7 @@ def initialize_paper(root: Path, competition: str, problem: str) -> None:
         metadata = (
             "\\renewcommand{\\PaperTitle}{DRAFT TITLE}\n"
             "\\renewcommand{\\PaperKeywords}{DRAFT KEYWORDS}\n"
-            "\\IncludeAIUsageStatementtrue\n"
+            "\\IncludeAIUsageStatementfalse\n"
         )
     else:
         metadata = (
@@ -173,6 +177,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
     branch_names = [f"model-{chr(97 + index)}" for index in range(args.branches)]
     profile, engine = paper_profile(args.competition)
     manifest = {
+        "schema_version": WORKFLOW_VERSION,
         "workflow_version": WORKFLOW_VERSION,
         "competition": args.competition,
         "year": args.year,
@@ -185,6 +190,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "paper_source": "paper/main.tex",
         "paper_profile": profile,
         "paper_engine": engine,
+        "competition_profile": "compliance/competition_profile.json",
     }
     manifest_path = root / "competition_manifest.json"
     check_existing_manifest(manifest_path, manifest)
@@ -246,11 +252,11 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "- Input modality and scale:\n- Constraint structure:\n"
         "- Data-generating mechanism:\n- Validation anchors:\n"
         "- Main uncertainty and failure risks:\n\n"
-        "## Heterogeneous routes\n\n"
-        "| route | structural idea | key assumptions | baseline | validation | compute budget | stop condition |\n"
-        "|---|---|---|---|---|---|---|\n"
-        "| A | | | | | | |\n| B | | | | | | |\n| C | | | | | | |\n\n"
-        "- Why these routes are structurally different:\n"
+        "## Strong baseline and optional alternatives\n\n"
+        "| role | structural idea | key assumptions | validation | compute budget | stop condition |\n"
+        "|---|---|---|---|---|---|\n"
+        "| strong baseline | | | | | |\n| optional alternative | | | | | |\n\n"
+        "- Why any additional route is necessary:\n"
         "- Letter-based stereotype explicitly rejected:\n",
     )
     write_text_if_missing(
@@ -259,72 +265,100 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "- Subproblem dependency graph:\n- Mathematical objects:\n- Data-generating mechanism:\n"
         "- Conservation, network, spatial, temporal, control or game structure:\n"
         "- Identifiability and uncertainty:\n- Validation anchors:\n"
-        "- Structure gaps that may justify a mechanism change:\n",
+        "- Structure gaps that may justify a minimal change:\n",
+    )
+    write_text_if_missing(
+        root / "innovation" / "baseline_failure_map.md",
+        "# Baseline failure map\n\n"
+        "| subproblem | strong baseline | tested assumption | observed failure | artifact | minimal repair opportunity |\n"
+        "|---|---|---|---|---|---|\n",
+    )
+    write_text_if_missing(
+        root / "innovation" / "opportunity_map.md",
+        "# Innovation opportunity map\n\n"
+        "Map each verified baseline failure to the smallest plausible change across formulation, representation, mechanism, decomposition, objective/constraint, inference, solution, data, validation, decision explanation, or model structure. Cross-domain analogy is optional.\n",
     )
     write_text_if_missing(
         root / "innovation" / "jury_rationale.md",
-        "# Innovation jury rationale\n\n- Hard vetoes applied:\n- Promoted safe route:\n- Promoted stretch route:\n- Rejected routes and evidence:\n",
+        "# Innovation claim jury rationale\n\n"
+        "- Hard vetoes applied:\n- Primary paper claim:\n- Supporting claims:\n"
+        "- Simpler alternatives considered:\n- Backups and rejected claims:\n",
     )
     innovation_headers = {
-        "candidate_portfolio.csv": [
-            "candidate_id", "scout_id", "origin_lens", "problem_structure", "mechanism_change",
-            "innovation_unit", "mechanism_family", "mathematical_formulation", "baseline",
-            "cross_domain_source", "data_needs", "validation_plan", "cheap_falsifier",
-            "failure_condition", "complexity_justification", "risk_role", "status", "notes",
+        "claim_portfolio.csv": [
+            "claim_id", "subproblem", "scout_id", "innovation_axis", "problem_structure",
+            "baseline", "baseline_failure", "failure_evidence_artifact", "failure_evidence_sha256",
+            "failure_check", "failure_checked_at", "proposed_change", "change_targets_failure",
+            "mathematical_expression", "why_this_change", "minimality_argument", "extra_complexity",
+            "extra_complexity_justified", "nearest_precedent", "difference_from_precedent",
+            "expected_effect", "falsification_test", "ablation_required", "complexity_cost",
+            "paper_location", "analogy_source", "is_fusion", "component_failure_map",
+            "mathematical_interface", "status", "notes",
         ],
         "novelty_audit.csv": [
-            "candidate_id", "claim", "search_queries", "primary_sources", "nearest_precedent",
-            "difference", "evidence_locator", "novelty_class", "metadata_status", "support_status",
-            "accessed_at", "auditor", "decision", "notes",
+            "claim_id", "search_queries", "primary_sources", "nearest_precedent", "difference",
+            "evidence_locator", "novelty_class", "metadata_status", "support_status",
+            "correction_retraction_status", "source_artifact", "source_sha256",
+            "verification_command", "checked_at", "auditor", "decision", "notes",
         ],
-        "feasibility_experiments.csv": [
-            "candidate_id", "experiment_id", "hypothesis", "baseline", "dataset_or_fixture",
-            "command", "seed", "metric", "baseline_value", "candidate_value", "result_artifact",
-            "result_sha256", "status", "reviewer", "decision", "notes",
+        "claim_experiments.csv": [
+            "claim_id", "experiment_id", "test_type", "component", "hypothesis", "baseline",
+            "dataset_or_fixture", "command", "seed", "metric", "baseline_value", "changed_value",
+            "artifact_path", "sha256", "checked_at", "status", "reviewer", "decision", "notes",
         ],
         "critic_findings.csv": [
-            "finding_id", "candidate_id", "attack_surface", "severity", "finding", "evidence",
-            "repair_or_falsifier", "status", "reviewer", "notes",
+            "finding_id", "claim_id", "attack_surface", "severity", "finding",
+            "repair_or_falsifier", "status", "artifact_path", "sha256", "command_or_check",
+            "checked_at", "reviewer", "notes",
         ],
         "selection.csv": [
-            "candidate_id", "rank", "decision", "problem_fit", "structural_novelty", "expected_gain",
-            "interpretability", "implementation_feasibility", "data_sufficiency",
-            "validation_strength", "judge_readability", "risks", "decision_evidence", "reviewer", "notes",
+            "claim_id", "decision", "paper_role", "problem_fit", "evidence_strength", "necessity",
+            "novelty", "robustness", "parsimony", "communication", "risks", "artifact_path",
+            "sha256", "command_or_check", "checked_at", "reviewer", "notes",
         ],
     }
     for filename, fields in innovation_headers.items():
         write_csv_header_if_missing(root / "innovation" / filename, fields)
-    official_sources: dict[str, object] = {
+    competition_profile: dict[str, object] = {
+        "schema_version": 1,
+        "profile_id": f"{args.competition}-{args.year}-unverified",
         "competition": args.competition,
-        "status": "must_reverify_at_stage_0_8_9",
-        "last_checked_at": None,
+        "edition": str(args.year),
+        "status": "unverified",
+        "effective_from": "",
+        "effective_to": None,
+        "verified_at": "",
         "verified_by": None,
         "sources": [],
+        "requirements": {
+            "paper": {
+                "format": None,
+                "max_front_matter_pages": None,
+                "max_total_pages": None,
+                "max_body_pages": None,
+                "max_pdf_bytes": None,
+                "page_size": None,
+                "table_of_contents_allowed": None,
+                "anonymous": None,
+            },
+            "submission": {
+                "support_archive_required": None,
+                "support_archive_max_bytes": None,
+            },
+            "ai": {
+                "policy_checked": False,
+                "usage_statement_required": None,
+                "details_pdf_required": None,
+                "statement_position": None,
+                "inline_disclosure_required": None,
+                "tool_reference_required": None,
+                "human_verification_required": None,
+                "details_filename": None,
+            },
+        },
+        "notes": "Populate only from current official source snapshots; do not infer rules from year.",
     }
-    if args.competition == "CUMCM":
-        official_sources["candidate_sources"] = [
-            {
-                "kind": "participation_rules",
-                "url": "https://www.mcm.edu.cn/html_cn/node/9d8e511fe7a1447b35f53a82c908e2e0.html",
-                "known_version": "2026 revision",
-            },
-            {
-                "kind": "paper_format",
-                "url": "https://www.mcm.edu.cn/html_cn/node/4cd596519c9eb9fbd866398f6df0caa3.html",
-                "known_version": "2026 revision",
-            },
-            {
-                "kind": "past_problems",
-                "url": "https://www.mcm.edu.cn/html_cn/block/8579f5fce999cdc896f78bca5d4f8237.html",
-                "known_version": "archive through 2025",
-            },
-            {
-                "kind": "displayed_papers",
-                "url": "https://dxs.moe.gov.cn/zx/hd/sxjm/sxjmlw/qkt_sxjm_lw_lwzs.shtml",
-                "known_version": "gallery through 2025",
-            },
-        ]
-    write_json_if_missing(root / "compliance" / "official_sources.json", official_sources)
+    write_json_if_missing(root / "compliance" / "competition_profile.json", competition_profile)
 
     write_json_if_missing(
         root / "audits" / "gate_status.json",
@@ -389,6 +423,10 @@ def create_workspace(args: argparse.Namespace) -> Path:
                     "accessed_at",
                     "auditor",
                     "severity",
+                    "verification_command",
+                    "artifact_path",
+                    "artifact_sha256",
+                    "checked_at",
                     "notes",
                 ]
             )
@@ -420,6 +458,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
                     "transform_script",
                     "fields_used",
                     "status",
+                    "verification_command",
+                    "checked_at",
                     "reviewer",
                     "notes",
                 ]
@@ -448,17 +488,36 @@ def create_workspace(args: argparse.Namespace) -> Path:
                 ]
             )
 
+    write_csv_header_if_missing(
+        root / "synthesis" / "innovation_claims.csv",
+        [
+            "claim_id", "claim_sentence", "problem_structure", "baseline_failure", "method_change",
+            "evidence_result_ids", "novelty_source_keys", "paper_section", "paper_anchor",
+            "figure_or_table", "claim_strength", "status", "artifact_path", "sha256",
+            "command_or_check", "checked_at", "reviewer", "notes",
+        ],
+    )
+    write_csv_header_if_missing(
+        root / "compliance" / "ai_usage_ledger.csv",
+        [
+            "use_id", "tool", "version", "purpose", "paper_section", "paper_anchor",
+            "citation_key", "human_changes", "verification_status", "artifact_path",
+            "sha256", "command_or_check", "checked_at", "reviewer", "notes",
+        ],
+    )
+
     task_board_path = root / "shared" / "task_board.csv"
     if not task_board_path.exists():
         model_task_ids = [f"model-{chr(97 + index)}" for index in range(args.branches)]
         task_rows = [
-            ["rule-audit", "all", "rules", "", "", "audits/rules", "", "", "manual official-rule review", "pending", "true", "verified rule snapshot", ""],
-            ["problem-route", "all", "routing", "rule-audit", "", "shared/problem_route.md", "", "", "two routes plus a strong baseline", "pending", "true", "frozen problem route", ""],
-            ["innovation-divergence", "all", "innovation", "problem-route", "", "innovation/candidate_portfolio.csv", "", "", "strong baseline plus structurally distinct routes", "pending", "true", "structure map and candidate portfolio", ""],
-            ["innovation-novelty", "all", "citations", "innovation-divergence", "", "innovation/novelty_audit.csv", "", "", "downgrade novelty claims to unverified", "pending", "true", "verified nearest-precedent audit", ""],
-            ["innovation-experiments", "all", "experiment", "innovation-novelty", "", "innovation/feasibility_experiments.csv", "", "", "retain reproducible baseline", "pending", "true", "cheap falsification experiments", ""],
-            ["innovation-critic", "all", "red-team", "innovation-experiments", "", "innovation/critic_findings.csv", "", "", "reject unresolved complex routes", "pending", "true", "blind critic findings", ""],
-            ["innovation-selection", "all", "jury", "innovation-critic", "", "innovation/selection.csv", "", "", "promote safe baseline route", "pending", "true", "2-3 promoted routes and jury rationale", ""],
+            ["profile-audit", "all", "rules", "", "", "compliance/competition_profile.json", "", "", "stop until an official source-backed profile is verified", "pending", "true", "versioned profile and source snapshots", ""],
+            ["problem-route", "all", "routing", "", "", "shared/problem_route.md", "", "", "unverified exploratory structure only until profile passes", "pending", "true", "frozen problem route", ""],
+            ["strong-baseline", "all", "baseline", "problem-route", "", "innovation/baseline_failure_map.md", "", "", "simplest defensible baseline", "pending", "true", "baseline definition and assumption tests", ""],
+            ["baseline-failure", "all", "diagnostic", "strong-baseline", "", "innovation/baseline_failure_map.md", "", "", "report no innovation if no material failure exists", "pending", "true", "artifact-backed failure map", ""],
+            ["innovation-discovery", "all", "innovation", "baseline-failure", "", "innovation/claim_portfolio.csv", "", "", "minimal repair or no claim", "pending", "true", "innovation claim portfolio and opportunity map", ""],
+            ["innovation-evidence", "all", "experiment", "innovation-discovery;profile-audit", "", "innovation/claim_experiments.csv", "", "", "do not promote while rules are unverified", "pending", "true", "nearest-precedent, falsification and ablation evidence", ""],
+            ["innovation-critic", "all", "red-team", "innovation-evidence", "", "innovation/critic_findings.csv", "", "", "reject unsupported complexity", "pending", "true", "blind critic findings", ""],
+            ["innovation-selection", "all", "jury", "innovation-critic", "", "innovation/selection.csv", "", "", "promote one evidence-backed primary claim", "pending", "true", "claim decisions and jury rationale", ""],
         ]
         for task_id in model_task_ids:
             task_rows.append(
@@ -467,7 +526,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
         joined_models = ";".join(model_task_ids)
         task_rows.extend(
             [
-                ["synthesis", "all", "synthesis", joined_models, "", "synthesis", "", "", "select strongest reproducible baseline", "pending", "true", "evidence matrix and selected route", ""],
+                ["synthesis", "all", "synthesis", joined_models, "", "synthesis", "", "", "select one strongest reproducible solution", "pending", "true", "evidence matrix and selected solution", ""],
                 ["reproduction", "all", "reproduction", "synthesis", "", "audits/reproduction", "", "", "rerun selected baseline", "pending", "true", "clean-run report", ""],
                 ["paper", "all", "writing", "synthesis", "", "paper", "", "", "minimal complete paper", "pending", "true", "direct-LaTeX paper", ""],
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
@@ -506,21 +565,19 @@ def create_workspace(args: argparse.Namespace) -> Path:
         write_text_if_missing(
             root / "compliance" / "submission_checklist.md",
             "# CUMCM submission checklist\n\n"
-            "- [ ] Current official rules, format, participation notice and regional additions reverified\n"
-            "- [ ] Electronic paper begins with a one-page abstract; no commitment page, numbering page or contents\n"
-            "- [ ] A4, margins >= 2.5 cm, body <= 30 pages, appendix begins after body\n"
-            "- [ ] PDF <= 20 MB; ZIP/RAR <= 20 MB; files submitted separately\n"
-            "- [ ] PDF, filenames, folders, metadata, code, figures and data contain no identity\n"
-            "- [ ] Appendix lists support files and includes all complete runnable source programs\n"
-            "- [ ] Support archive contains the same code version, external data and necessary intermediate results\n"
+            "- [ ] Versioned competition_profile.json is verified against current official source snapshots and hashes\n"
+            "- [ ] Paper format, front matter, paper size, margins, contents, page limits and file-size limits match the verified profile\n"
+            "- [ ] PDF, filenames, folders, metadata, code, figures and data satisfy the profile's anonymity requirements\n"
+            "- [ ] Appendix and support archive satisfy only the current profile's explicit requirements\n"
+            "- [ ] Any support archive contains the same code version, external data and necessary intermediate results\n"
             "- [ ] Every core number reproduces from a clean run and matches abstract/body/tables\n"
             "- [ ] Every input file is covered by data_provenance.csv and every core result by result_manifest.csv\n"
             "- [ ] Every cited work exists and its identifier, title, authors, year and venue match authoritative records\n"
             "- [ ] Every core external claim has an exact evidence locator and the source supports the wording\n"
             "- [ ] Published versions and correction/retraction status have been checked\n"
-            "- [ ] AI usage statement is before references and truthfully declares use of this Skill/Codex\n"
-            "- [ ] AI工具使用详情.pdf covers tool/version, purpose, process, adoption, modification and verification\n"
-            "- [ ] AI工具使用详情.pdf is listed in support_manifest.json and included in the support archive\n"
+            "- [ ] Actual AI use is truthfully disclosed exactly where and how the verified profile requires\n"
+            "- [ ] Any profile-required AI details artifact covers tool/version, purpose, process, adoption, modification and verification\n"
+            "- [ ] Any profile-required AI details artifact appears in the required submission location\n"
             "- [ ] Any additional material explicitly required by current rules is present\n"
             "- [ ] Task dependencies are closed and every blocking task has an owner, evidence and fallback\n"
             "- [ ] Support archive was built from support_manifest.json and passed identity/secret scanning\n"
@@ -539,9 +596,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
                     "problem_fit",
                     "assumption_risk",
                     "data_support",
-                    "structural_novelty",
-                    "novelty_evidence",
-                    "falsification_status",
+                    "innovation_claim_ids",
+                    "innovation_claim_status",
                     "baseline_gain",
                     "diagnostic_quality",
                     "uncertainty_stability",
@@ -572,7 +628,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--year", required=True, type=int)
     parser.add_argument("--problem", required=True)
-    parser.add_argument("--branches", type=int, default=3, choices=range(2, 9))
+    parser.add_argument("--branches", type=int, default=1, choices=range(1, 9))
     parser.add_argument("--innovation-mode", choices=("fast", "standard", "championship"), default="standard")
     return parser.parse_args()
 

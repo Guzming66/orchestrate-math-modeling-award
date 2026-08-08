@@ -41,6 +41,7 @@
 \input{sections/00_summary.tex}
 \par\medskip\noindent\textbf{Keywords:} \PaperKeywords
 \clearpage
+\typeout{MATHAWARD:FRONT_MATTER_PAGES=\number\numexpr\value{page}-1\relax}
 
 \input{sections/01_problem_restatement.tex}
 \input{sections/02_problem_analysis.tex}
@@ -59,9 +60,6 @@
 \setcounter{mathawardmainsolutionpages}{\value{page}}
 \addtocounter{mathawardmainsolutionpages}{-1}
 \typeout{MATHAWARD:MCM_MAIN_PAGES=\arabic{mathawardmainsolutionpages}}
-\ifnum\value{mathawardmainsolutionpages}>25\relax
-  \PackageError{mathaward-mcm}{Main solution exceeds 25 pages}{Shorten the solution.}
-\fi
 
 \ifIncludeAIReport
   \section*{Report on Use of AI}

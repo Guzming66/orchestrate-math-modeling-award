@@ -1,30 +1,46 @@
 #!/usr/bin/env python3
-"""Validate the evidence chain for an innovation portfolio."""
+"""Validate an evidence-backed portfolio of paper innovation claims."""
 
 from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from pathlib import Path
 
+from evidence_utils import artifact_errors
 
-THRESHOLDS = {
-    "fast": (5, 3, 1, 2, 2),
-    "standard": (8, 4, 2, 4, 3),
-    "championship": (10, 5, 2, 5, 4),
+
+EXPLORATION_TARGETS = {
+    "fast": (3, 2, 2, 0),
+    "standard": (6, 4, 3, 1),
+    "championship": (8, 5, 4, 1),
 }
-SCORE_FIELDS = (
+INNOVATION_AXES = {
+    "problem_formulation",
+    "state_representation",
+    "assumption_mechanism",
+    "problem_decomposition",
+    "objective_constraint",
+    "parameter_inference",
+    "solution_strategy",
+    "data_use",
+    "validation",
+    "decision_explanation",
+    "model_structure",
+    "model_fusion",
+}
+JURY_FIELDS = (
     "problem_fit",
-    "structural_novelty",
-    "expected_gain",
-    "interpretability",
-    "implementation_feasibility",
-    "data_sufficiency",
-    "validation_strength",
-    "judge_readability",
+    "evidence_strength",
+    "necessity",
+    "novelty",
+    "robustness",
+    "parsimony",
+    "communication",
 )
+TRUE_VALUES = {"true", "yes", "1", "required"}
+NONE_VALUES = {"", "none", "no", "0", "not_applicable", "n/a"}
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -34,182 +50,258 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def required(row: dict[str, str], fields: tuple[str, ...], label: str) -> list[str]:
     return [f"{label}: {field} is empty" for field in fields if not row.get(field, "").strip()]
+
+
+def is_true(value: str) -> bool:
+    return value.strip().lower() in TRUE_VALUES
+
+
+def validate_experiment(workspace: Path, row: dict[str, str], known_claims: set[str]) -> list[str]:
+    experiment_id = row.get("experiment_id", "").strip() or "experiment row"
+    errors = required(
+        row,
+        (
+            "claim_id", "experiment_id", "test_type", "hypothesis", "baseline",
+            "dataset_or_fixture", "command", "seed", "metric", "baseline_value",
+            "changed_value", "artifact_path", "sha256", "checked_at", "reviewer", "decision",
+        ),
+        experiment_id,
+    )
+    if row.get("claim_id", "").strip() not in known_claims:
+        errors.append(f"{experiment_id}: experiment references unknown claim")
+    if row.get("test_type", "").strip().lower() not in {"baseline_failure", "falsification", "ablation", "robustness"}:
+        errors.append(f"{experiment_id}: invalid test_type")
+    if row.get("decision", "").strip().lower() not in {"pass", "fail", "inconclusive"}:
+        errors.append(f"{experiment_id}: invalid decision")
+    errors.extend(
+        artifact_errors(
+            workspace,
+            row,
+            experiment_id,
+            check_field="command",
+        )
+    )
+    return errors
 
 
 def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
     workspace = workspace.resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    manifest_path = workspace / "competition_manifest.json"
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = json.loads((workspace / "competition_manifest.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         manifest = {}
         errors.append("competition manifest is missing or invalid")
     mode = str(manifest.get("innovation_mode", "standard"))
-    if mode not in THRESHOLDS:
+    if mode not in EXPLORATION_TARGETS:
         errors.append(f"unknown innovation mode: {mode}")
-    minimum_candidates, minimum_families, minimum_analogies, minimum_scouts, minimum_experiments = THRESHOLDS.get(mode, THRESHOLDS["standard"])
-    branch_count = len(manifest.get("branches", [])) if isinstance(manifest.get("branches"), list) else 3
+    target_claims, target_axes, target_scouts, target_analogies = EXPLORATION_TARGETS.get(
+        mode, EXPLORATION_TARGETS["standard"]
+    )
 
     folder = workspace / "innovation"
-    candidates = read_csv(folder / "candidate_portfolio.csv")
+    claims = read_csv(folder / "claim_portfolio.csv")
     novelty = read_csv(folder / "novelty_audit.csv")
-    experiments = read_csv(folder / "feasibility_experiments.csv")
+    experiments = read_csv(folder / "claim_experiments.csv")
     findings = read_csv(folder / "critic_findings.csv")
     selection = read_csv(folder / "selection.csv")
 
-    if len(candidates) < minimum_candidates:
-        errors.append(f"innovation portfolio has {len(candidates)} candidates; {mode} requires at least {minimum_candidates}")
-    candidate_ids: set[str] = set()
-    families: set[str] = set()
-    analogies: set[str] = set()
+    by_claim: dict[str, dict[str, str]] = {}
+    axes: set[str] = set()
     scouts: set[str] = set()
-    by_candidate: dict[str, dict[str, str]] = {}
-    candidate_fields = (
-        "candidate_id", "scout_id", "origin_lens", "problem_structure", "mechanism_change",
-        "innovation_unit", "mechanism_family", "mathematical_formulation", "baseline",
-        "data_needs", "validation_plan", "cheap_falsifier", "failure_condition",
-        "complexity_justification", "risk_role", "status",
-    )
-    for index, row in enumerate(candidates, start=2):
-        label = f"candidate row {index}"
-        errors.extend(required(row, candidate_fields, label))
-        candidate_id = row.get("candidate_id", "").strip()
-        if not candidate_id:
+    analogies: set[str] = set()
+    for index, row in enumerate(claims, start=2):
+        claim_id = row.get("claim_id", "").strip()
+        label = claim_id or f"claim row {index}"
+        errors.extend(required(row, ("claim_id", "subproblem", "innovation_axis", "status"), label))
+        if not claim_id:
             continue
-        if candidate_id in candidate_ids:
-            errors.append(f"duplicate candidate_id: {candidate_id}")
-        candidate_ids.add(candidate_id)
-        by_candidate[candidate_id] = row
-        scouts.add(row.get("scout_id", "").strip())
-        families.add(row.get("mechanism_family", "").strip())
-        analogy = row.get("cross_domain_source", "").strip()
+        if claim_id in by_claim:
+            errors.append(f"duplicate claim_id: {claim_id}")
+        by_claim[claim_id] = row
+        axis = row.get("innovation_axis", "").strip().lower()
+        if axis not in INNOVATION_AXES:
+            errors.append(f"{claim_id}: invalid innovation_axis")
+        else:
+            axes.add(axis)
+        scout = row.get("scout_id", "").strip()
+        analogy = row.get("analogy_source", "").strip()
+        if scout:
+            scouts.add(scout)
         if analogy:
             analogies.add(analogy)
-        if row.get("risk_role", "").strip().lower() not in {"safe", "balanced", "stretch"}:
-            errors.append(f"{candidate_id}: invalid risk_role")
-        if row.get("status", "").strip().lower() not in {"candidate", "rejected", "survivor"}:
-            errors.append(f"{candidate_id}: invalid candidate status")
-    families.discard("")
-    scouts.discard("")
-    if len(scouts) < minimum_scouts:
-        errors.append(f"innovation portfolio has {len(scouts)} independent scouts; {mode} requires at least {minimum_scouts}")
-    if len(families) < minimum_families:
-        errors.append(f"innovation portfolio has {len(families)} mechanism families; {mode} requires at least {minimum_families}")
-    if len(analogies) < minimum_analogies:
-        errors.append(f"innovation portfolio has {len(analogies)} cross-domain sources; {mode} requires at least {minimum_analogies}")
+        if row.get("status", "").strip().lower() not in {"draft", "exploring", "rejected", "supported"}:
+            errors.append(f"{claim_id}: invalid claim status")
+
+    if len(claims) < target_claims:
+        warnings.append(f"search breadth: {len(claims)} claims; {mode} target is {target_claims}")
+    if len(axes) < target_axes:
+        warnings.append(f"search breadth: {len(axes)} innovation axes; {mode} target is {target_axes}")
+    if len(scouts) < target_scouts:
+        warnings.append(f"search breadth: {len(scouts)} scouts; {mode} target is {target_scouts}")
+    if len(analogies) < target_analogies:
+        warnings.append(f"search breadth: {len(analogies)} cross-domain analogies; {mode} target is {target_analogies}")
 
     promoted = [row for row in selection if row.get("decision", "").strip().lower() == "promote"]
-    maximum_promoted = min(3, max(2, branch_count))
-    if not 2 <= len(promoted) <= maximum_promoted:
-        errors.append(f"selection must promote 2-{maximum_promoted} candidates; found {len(promoted)}")
+    if not promoted:
+        errors.append("selection must promote at least one evidence-backed innovation claim")
     promoted_ids: set[str] = set()
-    ranks: set[int] = set()
+    primary_ids: set[str] = set()
     for index, row in enumerate(promoted, start=2):
-        candidate_id = row.get("candidate_id", "").strip()
-        label = candidate_id or f"selection row {index}"
-        errors.extend(required(row, ("candidate_id", "rank", "risks", "decision_evidence", "reviewer", *SCORE_FIELDS), label))
-        if candidate_id not in by_candidate:
-            errors.append(f"selection references unknown candidate: {candidate_id}")
+        claim_id = row.get("claim_id", "").strip()
+        label = claim_id or f"selection row {index}"
+        errors.extend(
+            required(
+                row,
+                (
+                    "claim_id", "paper_role", "risks", "artifact_path", "sha256",
+                    "command_or_check", "checked_at", "reviewer", *JURY_FIELDS,
+                ),
+                label,
+            )
+        )
+        if claim_id not in by_claim:
+            errors.append(f"selection references unknown claim: {claim_id}")
             continue
-        if candidate_id in promoted_ids:
-            errors.append(f"candidate promoted more than once: {candidate_id}")
-        promoted_ids.add(candidate_id)
-        if by_candidate[candidate_id].get("status", "").strip().lower() != "survivor":
-            errors.append(f"{candidate_id}: promoted candidate is not marked survivor")
-        try:
-            rank = int(row.get("rank", ""))
-            if rank in ranks:
-                errors.append(f"duplicate promoted rank: {rank}")
-            ranks.add(rank)
-        except ValueError:
-            errors.append(f"{candidate_id}: rank is not an integer")
-        for field in SCORE_FIELDS:
+        if claim_id in promoted_ids:
+            errors.append(f"claim promoted more than once: {claim_id}")
+        promoted_ids.add(claim_id)
+        role = row.get("paper_role", "").strip().lower()
+        if role not in {"primary", "supporting"}:
+            errors.append(f"{claim_id}: paper_role must be primary or supporting")
+        if role == "primary":
+            primary_ids.add(claim_id)
+        for field in JURY_FIELDS:
             try:
                 score = int(row.get(field, ""))
                 if not 1 <= score <= 5:
                     raise ValueError
             except ValueError:
-                errors.append(f"{candidate_id}: {field} must be an integer from 1 to 5")
-    if mode != "fast" and promoted_ids:
-        roles = {by_candidate[item].get("risk_role", "").strip().lower() for item in promoted_ids if item in by_candidate}
-        if "safe" not in roles or "stretch" not in roles:
-            errors.append(f"{mode} selection must include both safe and stretch candidates")
+                errors.append(f"{claim_id}: {field} must be an integer from 1 to 5")
+        errors.extend(artifact_errors(workspace, row, f"{claim_id} selection"))
+    if promoted_ids and not primary_ids:
+        errors.append("at least one promoted claim must have paper_role=primary")
 
-    novelty_by_id = {row.get("candidate_id", "").strip(): row for row in novelty}
-    verified_experiment_candidates: set[str] = set()
-    for experiment in experiments:
-        if experiment.get("status", "").strip().lower() != "verified":
+    verified_experiments: dict[str, list[dict[str, str]]] = {}
+    for row in experiments:
+        if row.get("status", "").strip().lower() != "verified":
             continue
-        experiment_id = experiment.get("experiment_id", "").strip() or "experiment row"
-        local_errors = required(
-            experiment,
-            (
-                "candidate_id", "experiment_id", "hypothesis", "baseline", "dataset_or_fixture",
-                "command", "seed", "metric", "baseline_value", "candidate_value", "result_artifact",
-                "result_sha256", "reviewer", "decision",
-            ),
-            experiment_id,
-        )
-        candidate_id = experiment.get("candidate_id", "").strip()
-        if candidate_id not in by_candidate:
-            local_errors.append(f"{experiment_id}: experiment references unknown candidate")
-        if experiment.get("decision", "").strip().lower() not in {"pass", "continue", "promote"}:
-            local_errors.append(f"{experiment_id}: experiment decision does not permit promotion")
-        relative = experiment.get("result_artifact", "").replace("\\", "/").strip()
-        path = (workspace / relative).resolve()
-        try:
-            path.relative_to(workspace)
-        except ValueError:
-            local_errors.append(f"{experiment_id}: result artifact escapes workspace")
-        else:
-            if not path.is_file():
-                local_errors.append(f"{experiment_id}: result artifact is missing")
-            elif experiment.get("result_sha256", "").strip().lower() != sha256_file(path):
-                local_errors.append(f"{experiment_id}: result sha256 does not match")
+        local_errors = validate_experiment(workspace, row, set(by_claim))
         errors.extend(local_errors)
-        if not local_errors and candidate_id:
-            verified_experiment_candidates.add(candidate_id)
-    findings_by_id: dict[str, list[dict[str, str]]] = {}
+        if not local_errors and row.get("decision", "").strip().lower() == "pass":
+            verified_experiments.setdefault(row.get("claim_id", "").strip(), []).append(row)
+
+    novelty_by_claim: dict[str, list[dict[str, str]]] = {}
+    for row in novelty:
+        novelty_by_claim.setdefault(row.get("claim_id", "").strip(), []).append(row)
+    findings_by_claim: dict[str, list[dict[str, str]]] = {}
     for row in findings:
-        findings_by_id.setdefault(row.get("candidate_id", "").strip(), []).append(row)
+        findings_by_claim.setdefault(row.get("claim_id", "").strip(), []).append(row)
 
-    for candidate_id in sorted(promoted_ids):
-        audit = novelty_by_id.get(candidate_id)
-        if audit is None:
-            errors.append(f"{candidate_id}: novelty audit is missing")
+    claim_fields = (
+        "claim_id", "subproblem", "innovation_axis", "problem_structure", "baseline",
+        "baseline_failure", "failure_evidence_artifact", "failure_evidence_sha256",
+        "failure_check", "failure_checked_at", "proposed_change", "change_targets_failure",
+        "mathematical_expression", "why_this_change", "minimality_argument", "extra_complexity",
+        "extra_complexity_justified", "nearest_precedent", "difference_from_precedent",
+        "expected_effect", "falsification_test", "ablation_required", "complexity_cost",
+        "paper_location", "is_fusion", "status",
+    )
+    for claim_id in sorted(promoted_ids):
+        claim = by_claim[claim_id]
+        errors.extend(required(claim, claim_fields, claim_id))
+        if claim.get("status", "").strip().lower() != "supported":
+            errors.append(f"{claim_id}: promoted claim is not marked supported")
+        if not is_true(claim.get("change_targets_failure", "")):
+            errors.append(f"{claim_id}: proposed change is not explicitly linked to the baseline failure")
+        errors.extend(
+            artifact_errors(
+                workspace,
+                claim,
+                f"{claim_id} baseline failure",
+                path_field="failure_evidence_artifact",
+                sha_field="failure_evidence_sha256",
+                check_field="failure_check",
+                time_field="failure_checked_at",
+            )
+        )
+
+        extra_complexity = claim.get("extra_complexity", "").strip().lower()
+        needs_ablation = is_true(claim.get("ablation_required", "")) or extra_complexity not in NONE_VALUES
+        if extra_complexity not in NONE_VALUES and not is_true(claim.get("extra_complexity_justified", "")):
+            errors.append(f"{claim_id}: extra complexity is not justified")
+        if is_true(claim.get("is_fusion", "")):
+            errors.extend(required(claim, ("component_failure_map", "mathematical_interface"), claim_id))
+            needs_ablation = True
+
+        claim_tests = verified_experiments.get(claim_id, [])
+        test_types = {row.get("test_type", "").strip().lower() for row in claim_tests}
+        if "falsification" not in test_types:
+            errors.append(f"{claim_id}: no verified falsification test")
+        if needs_ablation and "ablation" not in test_types:
+            errors.append(f"{claim_id}: complexity/fusion requires a verified ablation")
+
+        audits = novelty_by_claim.get(claim_id, [])
+        if len(audits) != 1:
+            errors.append(f"{claim_id}: exactly one novelty audit is required; found {len(audits)}")
         else:
-            errors.extend(required(audit, ("claim", "primary_sources", "nearest_precedent", "difference", "evidence_locator", "novelty_class", "metadata_status", "support_status", "accessed_at", "auditor", "decision"), candidate_id))
-            novelty_class = audit.get("novelty_class", "").strip().lower()
-            if novelty_class not in {"known_baseline", "adaptation", "combination", "problem_specific"}:
-                errors.append(f"{candidate_id}: novelty_class is unverified or invalid")
+            audit = audits[0]
+            errors.extend(
+                required(
+                    audit,
+                    (
+                        "claim_id", "search_queries", "primary_sources", "nearest_precedent",
+                        "difference", "evidence_locator", "novelty_class", "metadata_status",
+                        "support_status", "correction_retraction_status", "source_artifact",
+                        "source_sha256", "verification_command", "checked_at", "auditor", "decision",
+                    ),
+                    claim_id,
+                )
+            )
+            if audit.get("novelty_class", "").strip().lower() not in {
+                "known_baseline", "adaptation", "combination", "problem_specific"
+            }:
+                errors.append(f"{claim_id}: novelty_class is invalid or unverified")
             if audit.get("metadata_status", "").strip().lower() != "verified":
-                errors.append(f"{candidate_id}: novelty metadata is not verified")
+                errors.append(f"{claim_id}: novelty metadata is not verified")
             if audit.get("support_status", "").strip().lower() != "supported":
-                errors.append(f"{candidate_id}: novelty difference is not supported")
-            if audit.get("decision", "").strip().lower() not in {"continue", "pass", "promote"}:
-                errors.append(f"{candidate_id}: novelty audit decision does not permit promotion")
+                errors.append(f"{claim_id}: novelty difference is not supported")
+            if audit.get("correction_retraction_status", "").strip().lower() not in {
+                "clear", "checked", "not_applicable", "corrected_version_used"
+            }:
+                errors.append(f"{claim_id}: correction/retraction status is not cleared")
+            if audit.get("decision", "").strip().lower() not in {"pass", "continue", "promote"}:
+                errors.append(f"{claim_id}: novelty audit does not permit promotion")
+            errors.extend(
+                artifact_errors(
+                    workspace,
+                    audit,
+                    f"{claim_id} novelty audit",
+                    path_field="source_artifact",
+                    sha_field="source_sha256",
+                    check_field="verification_command",
+                )
+            )
 
-        if candidate_id not in verified_experiment_candidates:
-            errors.append(f"{candidate_id}: no verified feasibility experiment")
-
-        candidate_findings = findings_by_id.get(candidate_id, [])
-        if not candidate_findings:
-            errors.append(f"{candidate_id}: critic review is missing")
-        for finding in candidate_findings:
-            finding_id = finding.get("finding_id", "").strip() or candidate_id
-            errors.extend(required(finding, ("finding_id", "attack_surface", "severity", "finding", "evidence", "repair_or_falsifier", "status", "reviewer"), finding_id))
+        claim_findings = findings_by_claim.get(claim_id, [])
+        if not claim_findings:
+            errors.append(f"{claim_id}: critic review is missing")
+        for finding in claim_findings:
+            finding_id = finding.get("finding_id", "").strip() or claim_id
+            errors.extend(
+                required(
+                    finding,
+                    (
+                        "finding_id", "claim_id", "attack_surface", "severity", "finding",
+                        "repair_or_falsifier", "status", "artifact_path", "sha256",
+                        "command_or_check", "checked_at", "reviewer",
+                    ),
+                    finding_id,
+                )
+            )
             severity = finding.get("severity", "").strip().lower()
             status = finding.get("status", "").strip().lower()
             if severity not in {"blocking", "major", "minor", "clear"}:
@@ -220,24 +312,17 @@ def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
                 errors.append(f"{finding_id}: blocking critic finding remains open")
             if severity == "major" and status not in {"closed", "clear"}:
                 errors.append(f"{finding_id}: major critic finding remains open")
-
-    if len(verified_experiment_candidates) < minimum_experiments:
-        errors.append(
-            f"innovation portfolio has verified experiments for {len(verified_experiment_candidates)} candidates; "
-            f"{mode} requires at least {minimum_experiments}"
-        )
-    if ranks and ranks != set(range(1, len(promoted) + 1)):
-        errors.append("promoted ranks must be contiguous starting at 1")
+            errors.extend(artifact_errors(workspace, finding, finding_id))
 
     report = {
         "status": "pass" if not errors else "block",
         "mode": mode,
-        "candidate_count": len(candidates),
-        "mechanism_family_count": len(families),
-        "cross_domain_source_count": len(analogies),
-        "independent_scout_count": len(scouts),
-        "verified_experiment_candidate_count": len(verified_experiment_candidates),
-        "promoted_candidates": sorted(promoted_ids),
+        "claim_count": len(claims),
+        "innovation_axis_count": len(axes),
+        "scout_count": len(scouts),
+        "analogy_count": len(analogies),
+        "promoted_claims": sorted(promoted_ids),
+        "primary_claims": sorted(primary_ids),
         "errors": sorted(set(errors)),
         "warnings": sorted(set(warnings)),
     }
@@ -247,8 +332,11 @@ def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
     return report
 
 
+validate_innovation_claims = validate_innovation_portfolio
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate innovation candidates, evidence, experiments, and jury selection.")
+    parser = argparse.ArgumentParser(description="Validate paper innovation claims and their evidence chains.")
     parser.add_argument("workspace")
     args = parser.parse_args()
     report = validate_innovation_portfolio(Path(args.workspace).expanduser().resolve())

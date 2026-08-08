@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "cumcm-2025-b-inverse-measurement",
+      "official_source": "https://www.mcm.edu.cn/html_cn/node/03c91a444e62eee81a3740fa97a461a6.html",
+      "task_signal": "physics-backed inverse measurement with uncertainty",
+      "expected_behavior": "test the simplest physical estimator, identify a measurable failure, and prefer a minimal identifiability or uncertainty repair over a model stack"
+    },
+    {
+      "case_id": "cumcm-2025-d-dynamic-escape-network",
+      "official_source": "https://www.mcm.edu.cn/html_cn/node/03c91a444e62eee81a3740fa97a461a6.html",
+      "task_signal": "dynamic network propagation and safe routing",
+      "expected_behavior": "show where a static shortest path becomes infeasible before adding the smallest time-dependent constraint"
+    },
+    {
+      "case_id": "cumcm-2024-b-sequential-decision",
+      "official_source": "https://www.mcm.edu.cn/html_cn/node/a0c1fb5c31d43551f08cd8ad16870444.html",
+      "task_signal": "inspection, assembly, uncertainty, and sequential cost decisions",
+      "expected_behavior": "separate performance engineering from an evidence-backed change in state, information, objective, or decision timing"
+    },
+    {
+      "case_id": "cumcm-2023-c-forecast-to-decision",
+      "official_source": "https://www.mcm.edu.cn/html_cn/block/8579f5fce999cdc896f78bca5d4f8237.html",
+      "task_signal": "demand estimation feeding pricing and replenishment",
+      "expected_behavior": "test whether a point forecast fails the downstream risk decision and ablate the uncertainty interface rather than comparing model names"
+    }
+  ],
+  "required_metrics": [
+    "supported_claim_count",
+    "false_innovation_count",
+    "mean_component_count",
+    "baseline_gain_coverage",
+    "reproducibility_rate",
+    "paper_mapping_rate",
+    "blind_quality_score"
+  ]
+}

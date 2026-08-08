@@ -11,7 +11,7 @@ python <skill>/scripts/validate_task_board.py <workspace> --final
 
 普通检查报告未知依赖、环、越序完成和逾期；最终检查还要求所有阻断任务关闭并具备负责人、时间、后备方案和证据。
 
-## Innovation Engine
+## Innovation Claim Engine
 
 在正式模型分支启动前运行：
 
@@ -19,11 +19,13 @@ python <skill>/scripts/validate_task_board.py <workspace> --final
 python <skill>/scripts/validate_innovation_portfolio.py <workspace>
 ```
 
-要求 `candidate_portfolio.csv` 达到当前模式的候选数和数学机制家族下限，`novelty_audit.csv` 覆盖晋级候选的最近先例与原文定位，`feasibility_experiments.csv` 中的结果文件和 SHA-256 一致，`critic_findings.csv` 无开放阻断/重大项，`selection.csv` 只晋级 2–3 条有完整证据的路线。终审器会重新运行该检查。
+候选数量、axis、scout 和跨领域类比只作为探索告警。阻断条件是晋级 claim 缺少强基线失败证据、最小改变、最近先例、falsification、必要消融、Critic 关闭或 artifact/hash。至少一个 `primary` claim 通过即可，不强制 safe/stretch 或多个模型。
+
+论文完成后运行 `python <skill>/scripts/validate_paper_innovation.py <workspace>`，把 promoted claim 映射到结果、引用、LaTeX 章节和锚点；未映射的强创新措辞阻断。
 
 ## 数据与结果溯源
 
-- `audits/data/data_provenance.csv` 必须覆盖 `inputs/original/` 与 `inputs/external/` 的每个文件。记录来源、授权/条款、取得时间、原始和当前 SHA-256、使用字段、状态及复核人。
+- `audits/data/data_provenance.csv` 必须覆盖 `inputs/original/` 与 `inputs/external/` 的每个文件。记录来源、授权/条款、取得时间、原始和当前 SHA-256、使用字段、核验命令/检查、核验时间、状态及复核人。
 - 原始输入不得在原位变换；清洗产物写入其他目录，并在 `transform_script` 中指回生成脚本。
 - `synthesis/result_manifest.csv` 覆盖摘要、结论和关键表图中的核心结果。记录正文位置、值、单位、文件、生成器、命令、输入 ID、随机种子、环境快照、SHA-256 和复核人。
 - 无量纲结果把单位明确写为 `dimensionless`；确定性程序把种子写为 `deterministic`，不要留空。
@@ -32,14 +34,14 @@ python <skill>/scripts/validate_innovation_portfolio.py <workspace>
 
 ## 八道门禁状态
 
-在 `audits/gate_status.json` 中把 G0—G7 逐项写为 `pass`，并填写独立复核人、ISO 时间、证据路径和未关闭阻断项。不能用空字符串、口头确认或自评分代替证据。
+在 `audits/gate_status.json` 中把 G0—G7 逐项写为 `pass`，并填写独立复核人、ISO 时间、未关闭阻断项，以及 `artifact_path + sha256 + command_or_check + checked_at` 证据对象。不能用字符串路径、口头确认或自评分代替证据。
 
-`compliance/official_sources.json` 必须把 `status` 改为 `verified`，填写核验人与时间，并在 `sources` 中保存每个实际采用的官方页面或 PDF 的类型、URL、版本和 SHA-256。候选链接不等于已核验来源。
+`compliance/competition_profile.json` 必须通过 `validate_competition_profile.py`。Profile 与 manifest 的赛事/届次一致，并包含带本地快照、SHA-256、检查步骤和时间的官方来源。Finalizer 只执行该 profile，不从年份或旧模板推断要求。
 
 ## 支撑包与匿名扫描
 
 1. 在 `compliance/anonymity_terms.txt` 每行填写一个禁止出现的真实姓名、学校、赛区、用户名或队伍别名。
-2. 在 `submission/support_manifest.json` 逐文件列出要进入支撑包的相对路径；不使用目录通配符，也不重新打包原始赛题附件。
+2. 在 `submission/support_manifest.json` 逐文件列出要进入支撑包的相对路径；字符串项保持原路径，对官方要求固定压缩包内名称的文件使用 `{ "source": "工作区相对路径", "archive_path": "包内路径" }`。不使用目录通配符，也不重新打包原始赛题附件。
 3. 运行：
 
 ```text
@@ -56,4 +58,4 @@ python <skill>/scripts/package_submission.py <workspace> --require-paper
 python <skill>/scripts/finalize_submission.py <workspace>
 ```
 
-终审器执行环境快照、任务板最终检查、Innovation Engine、DOI 验证、官方来源、文献、输入、结果、复现、证据矩阵、G0—G7、LaTeX 提交构建和 CUMCM 支撑包扫描。通过后写出 `submission/submission_manifest.json`，其中保存论文和支撑包 SHA-256；任一检查失败时只写阻断报告，不宣称可提交。
+终审器先执行 preflight、环境快照、任务板、competition profile、Innovation Claim Engine、论文创新映射、DOI/文献、AI 使用台账、输入、结果、复现和 artifact-backed G0—G7。任一上游硬门禁失败时跳过 submission build 与打包，避免产生看似可提交的 PDF；上游全通过后才直编 LaTeX、执行 profile 版面门禁并扫描支撑包。全部通过后写出 `submission/submission_manifest.json`。

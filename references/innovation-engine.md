@@ -1,135 +1,121 @@
-# Innovation Engine：创新方案研究组
+# Innovation Claim Engine：数学建模论文创新工程
 
-## 目标与边界
+## 核心定义
 
-把创新定义为“针对题目特殊结构的必要机制改变，并由基线、文献和实验共同证明其价值”。不要把算法名、参数量或模型堆叠当作创新，也不要声称“首次”“从未有人做过”或保证奖项。
+创新不是模型数量、算法名称或复杂度。把可晋级的创新主张写成：
 
-在 `$mathmodel-skill` Stage 2 结束、Stage 3 正式选型之前运行本流程。已固定题目时不重复选题；多小题时先建立依赖图，再决定哪些创新可跨小题复用，哪些必须局部处理。
+`题目结构 → 强基线 → 已证实的基线失败 → 最小必要改变 → 增益/失效证据 → 最近先例与差异 → 论文落点`
 
-## 能力与预算路由
+最终可以只有一个传统主模型和一个强创新点。融合、集成或 hybrid 本身不获得创新信用；只有组件分别解决不同失败机制、存在明确数学接口且逐组件消融证明不可替代时，才把融合视为创新的一部分。不得声称世界首创或保证奖项。
 
-沿用比赛工作流的模式，不绑定订阅价格、固定模型名或假定可用额度。
+这一工程定义是本 Skill 的方法论推断，不冒充赛事官方评分公式。CUMCM 的赛区与全国评阅规范都要求评阅者识别“突出创新点”，并未把创新限定为新模型架构；COMAP 的当届说明强调问题分析、模型动机、测试、误差/敏感性、结论与沟通，专项奖还分别关注创造性、数据使用、实用性、清晰度和创新建模。因此本 Engine 审核整条论文证据链，而不把算法数量当作官方创新指标：
 
-| mode | 候选下限 | 独立侦察视角 | 数学机制家族下限 | 进入便宜实验 | 晋级正式分支 |
-|---|---:|---:|---:|---:|---:|
-| `fast` | 5 | 2 | 3 | 2 | 2 |
-| `standard` | 8 | 4 | 4 | 3 | 2–3 |
-| `championship` | 10 | 5 | 5 | 4 | 2–3 |
+- CUMCM 赛区评阅规范：<https://www.mcm.edu.cn/html_cn/node/011a3fefdb4951a8cb595400f44ec3df.html>
+- CUMCM 全国奖项评阅规范：<https://www.mcm.edu.cn/html_cn/node/b1f48689659f0660e80a2d6279d7b37d.html>
+- COMAP Contest Rules, Registration and Instructions：<https://www.contest.comap.com/undergraduate/contests/mcm/instructions.html>
 
-质量优先或 Pro 类运行模式只用于结构裁决、强红队和最终评委排序；路线枚举、去重和格式整理可用普通模式。只有同题评测显示质量收益时才继续使用更高计算档位。若没有子代理能力，就按同样的隔离顺序串行执行，不跳过盲评。
+## 探索目标，不是硬门禁
 
-## 三波架构
+| mode | claim 目标 | innovation axis 目标 | scout 目标 | 类比目标 |
+|---|---:|---:|---:|---:|
+| `fast` | 3 | 2 | 2 | 0 |
+| `standard` | 6 | 4 | 3 | 1 |
+| `championship` | 8 | 5 | 4 | 1 |
 
-### Wave 1：结构映射与独立发散
+低于目标只产生 `warning: search breadth may be insufficient`。不要为了过门禁制造主张、类比、scout、模型分支或 safe/stretch 组合。跨领域类比只用于发现机会，不证明创新成立。
 
-1. **Structure Mapper**：只抽取数学对象、守恒/网络/时空/博弈/控制结构、数据生成机制、可识别性、约束和可验证锚点，不先报算法名。
-2. **Route Scouts**：各自只拿结构图和统一输出契约，分别从机理、统计/不确定性、优化/控制、图与时空、行为/博弈等互斥视角提出路线；冻结前不互看。
-3. **Cross-domain Analogist**：从库存控制、可靠性、生存分析、最优运输、排队论、因果推断、生态动力学、信号处理等领域寻找结构同构，而不是只换术语。
-4. 总控去重：只有核心假设、状态表示、目标/约束或验证机制发生实质变化才算不同路线；只换优化器、调参器或神经网络骨干视为重复。
+## Innovation axes
 
-Structure Mapper 提示词：
+- `problem_formulation`：问题重构；
+- `state_representation`：状态、变量、潜变量、无量纲量或图表示；
+- `assumption_mechanism`：守恒、边界、滞后、拥堵、异质性等机制；
+- `problem_decomposition`：时空、阶段或层次分解；
+- `objective_constraint`：损失、风险、公平、鲁棒或可行约束；
+- `parameter_inference`：辨识、校准、贝叶斯更新或误差传播；
+- `solution_strategy`：利用题目结构的松弛、剪枝、降维、近似或动态规划；
+- `data_use`：从现有数据提取新的有效信息或指标；
+- `validation`：物理锚点、反事实、边界测试或精确小实例；
+- `decision_explanation`：阈值、策略区域、风险图或可行动规则；
+- `model_structure`：题目确实需要的新模型机制；
+- `model_fusion`：仅在组件必要性、接口和消融均通过时使用。
 
-```text
-只读取官方题面、原始附件和 shared/problem_contract.md。不要提出算法名。
-输出：子问依赖图；数学对象；数据生成机制；守恒/边界/离散/动态结构；
-可识别性与主要不确定性；至少三类可验证锚点；最可能产生针对性创新的结构缺口。
-区分题面事实、假设和未知。写入 innovation/structure_map.md。
-```
+## Wave 1 — Structure & Baseline
 
-Route Scout 提示词：
+1. **Structure Mapper** 只抽取数学对象、数据生成机制、守恒/网络/时空/控制结构、可识别性、子问接口和验证锚点，不先报算法名。
+2. **Strong Baseline Builder** 为每个关键子问建立最自然、最简单、可复现的经典基线，冻结输入、指标和切分。
+3. **Baseline Failure Mapper** 用 artifact-backed 测试识别具体失败机制；“精度不够”“模型太简单”不算失败机制。
 
-```text
-你是独立路线侦察者，只能读取 innovation/structure_map.md、原题和共享数据字典，
-不得读取其他侦察者或主任务偏好。从分配给你的唯一视角提出候选卡。
-每张卡必须写：题目特殊结构、传统基线、机制改变、数学表达、创新来源、数据需求、
-最低可行闭环、便宜证伪实验、失败条件、复杂度必要性和预期评委质疑。
-没有结构差异的路线直接标为 duplicate，不凑数量。
-```
-
-Cross-domain Analogist 提示词：
-
-```text
-从与题目表面领域不同的学科中寻找数学结构同构。对每个类比给出：源领域、
-映射表、可迁移机制、失配点、需要修改的假设、最近基线和一个可快速否定该迁移的测试。
-禁止仅用新领域术语重命名原模型。
-```
-
-### Wave 2：新颖性核验与最低成本实验
-
-1. **Literature Auditor** 使用 `$citation-management`。对晋级候选搜索原始论文、正式出版物、官方标准和数据文档，核对题录、DOI/标识符、正式版本和撤稿/更正状态。
-2. 把创新单位写成：`题目结构 + 机制改变 + 可验证增益`。按 `known_baseline`、`adaptation`、`combination`、`problem_specific` 或 `unverified` 分类；检索不足只能写 `unverified`。
-3. **Experimenter** 只做能快速杀死坏方案的最小实验：合成边界、小样本、精确小实例、基线对照、单项消融、运行时间或上游误差传播。此阶段不追求完整论文结果。
-4. 每个候选必须给出停止条件。未超过基线、对关键扰动不稳、数据不可得或计算预算失控时立即淘汰。
-
-Literature Auditor 提示词：
+Failure Mapper 提示词：
 
 ```text
-把每条创新主张拆成可检索单元。搜索最近先例和原始来源，使用 citation-management
-核验元数据、正式版本及撤稿/更正状态，并打开原文定位支持范围。
-输出 nearest precedent、相同点、实质差异、证据定位和 novelty_class。
-搜索结果页、综述摘要和 AI 回答只能发现线索；不得下“世界首创”结论。
+读取题面、结构图和冻结强基线。逐项测试基线假设，寻找守恒破坏、删失、不可识别、
+尾部风险、动态失配、网络成本失真、初值敏感、泄漏或上游不确定性丢失等具体 failure。
+每个 failure 保存 artifact_path、sha256、command/check 和 timestamp。
+若没有材料性 failure，明确输出“当前无创新必要”，不要制造高级模型。
 ```
 
-Experimenter 提示词：
+## Wave 2 — Innovation Discovery
 
-```text
-为分配的候选设计最便宜且最有杀伤力的证伪实验。必须包含同口径基线、固定输入、
-命令、环境、种子、指标、基线值、候选值、结果文件和 SHA-256。
-优先测试该候选声称解决的结构缺口；若增益只来自更大计算量或数据泄漏，判定失败。
-```
+让隔离的 scouts 从不同 innovation axis 寻找解决已验证 failure 的最小改动。每张 `claim card` 回答：
 
-### Wave 3：盲红队与评委裁决
+- 哪个题目结构导致哪个基线假设失败；
+- failure 的可复核证据是什么；
+- proposed change 如何直接作用于 failure；
+- 数学表达和最简单替代方案是什么；
+- 每层额外复杂度为什么必要；
+- 如何证伪、消融，失败时退回什么基线；
+- 预计写在论文哪个位置。
 
-1. **Critic** 不看候选作者辩护，攻击题意贴合、不可识别、数据需求、泄漏、复杂度、跨域失配、验证不足和论文可解释性。每项批评必须引用证据和可关闭条件。
-2. **Jury** 只读取冻结候选卡、文献审计、小实验和 Critic 结果，不读取作者身份或主任务偏好。
-3. Jury 从问题贴合、结构创新、预期增益、可解释性、实现可行性、数据充分性、验证强度和评委可读性八个维度给出 1–5 诊断分；文献差异已由前置引用审计控制，分数不是获奖概率，也不覆盖硬否决。
-4. `standard/championship` 晋级组合必须包含至少一条 `safe` 和一条 `stretch` 路线。最终正式建模只保留 2–3 条，其他路线记录淘汰理由，不删除证据。
+执行最小充分改变原则：较简单的机制已经消除 failure 时，禁止仅为“创新感”追加组件。只换优化器、调参器、backbone 或把 LSTM/XGBoost/GNN/GA 等串联，均按重复或性能工程处理。
 
-Critic 提示词：
+Cross-domain Analogist 可以给出源领域、结构映射、失配点和否定测试；无可靠同构时允许输出零条类比。
 
-```text
-假设候选方案可能是“复杂但无用”的。逐项攻击：特殊结构是否真实、机制改变是否必要、
-与基线是否同口径、跨域映射是否失配、数据是否可得、是否可复现、是否能在赛程内完成、
-评委能否从论文看懂增益。每项 finding 给 severity、证据、修复或证伪条件和状态。
-```
+## Wave 3 — Evidence
 
-Jury 提示词：
+1. **Literature Auditor** 使用 `$citation-management`，核对原始来源、权威元数据、正式版本、撤稿/更正状态、最近先例和原文定位。搜索页和 AI 回答只能发现线索。
+2. **Experimenter** 先做最便宜的 falsification，再按需做 ablation 和 robustness。实验必须冻结同口径基线、数据/fixture、命令、环境、种子、指标、结果 artifact 和 SHA-256。
+3. 消融对象是“创新改变开/关”，不是只比较整套 Model A/Model B。
+4. fusion/ensemble/hybrid 必须同时满足：组件对应不同 failure、数学接口明确、每个组件均有通过的消融；否则不给创新信用。
 
-```text
-只依据冻结证据排序，不用多数投票，不平均不兼容模型。先执行硬否决，再给八维诊断分。
-晋级 2–3 条：至少一条 safe 和一条 stretch；解释每条创新来自哪个题目结构、
-相对哪个基线、由哪项实验支持、最大风险是什么。分数相近时选择证据链更短且更可复现者。
-```
+## Wave 4 — Paper Jury
 
-## 硬否决
+Critic 先执行硬否决，再由 Jury 做 Pareto/lexicographic 裁决，不计算一个可被高复杂度补偿的总分。优先级：
 
-出现任一项即不晋级：
+`problem fit → evidence → necessity → novelty → robustness → parsimony → communication`
 
-- 创新与题目特殊结构没有可解释连接；
-- 只是 Transformer/GNN/LSTM/遗传算法等组件堆叠，无法给出必要性或消融；
-- 没有同口径基线或便宜证伪实验；
-- 依赖比赛期间无法获得、无法授权或无法核验的数据；
-- 文献身份、最近先例或创新差异仍为 `unverified`；
-- 小实验结果不可复现、哈希不一致或只在单一种子/单一切分成立；
-- 仍有未关闭 `blocking` Critic finding；
-- 预计实现、调试和论文解释超出剩余赛程。
+Jury 的 1–5 分只作诊断：问题贴合、证据强度、必要性、新颖性、稳健性、简洁性和表达清晰度。最终至少晋级一个证据充分的 `primary` claim，可有 supporting claims；不要求 safe/stretch，也不限制为 2–3 个模型。正式建模可以只保留一个主方案，`synthesis/evidence_matrix.csv` 仍只选择一个最终 solution branch。
 
-## 产物与验证
+## 真正的阻断条件
 
-所有产物写入 `innovation/`，不得混入正式分支结果：
+任一晋级 claim 出现以下情况即阻断：
 
-- `structure_map.md`
-- `candidate_portfolio.csv`
-- `novelty_audit.csv`
-- `feasibility_experiments.csv`
-- `critic_findings.csv`
-- `selection.csv`
-- `jury_rationale.md`
+- 没有强基线或明确 baseline failure；
+- failure 没有真实 artifact、哈希、检查步骤和时间；
+- proposed change 与 failure 没有结构/因果联系；
+- 没有 falsification test；需要复杂度或融合却没有增量消融；
+- 最近先例、题录身份、原文支持或撤稿/更正状态未核实；
+- 只是换名、堆叠或增加复杂度而无独立增益；
+- blocking/major Critic finding 未关闭；
+- 没有明确论文落点，或论文主张无法映射到结果与引用。
+
+## 产物
+
+- `innovation/structure_map.md`
+- `innovation/baseline_failure_map.md`
+- `innovation/opportunity_map.md`
+- `innovation/claim_portfolio.csv`
+- `innovation/novelty_audit.csv`
+- `innovation/claim_experiments.csv`
+- `innovation/critic_findings.csv`
+- `innovation/selection.csv`
+- `innovation/jury_rationale.md`
+- `synthesis/innovation_claims.csv`
 
 运行：
 
 ```text
 python <skill>/scripts/validate_innovation_portfolio.py <workspace>
+python <skill>/scripts/validate_paper_innovation.py <workspace>
 ```
 
-验证通过后，才把 `selection.csv` 中 `promote` 的 2–3 条路线映射到 `branches/model-*`。正式分支仍须从强基线开始，并在 Stage 5–7 完成完整求解、统计/不确定性、交叉验证和复现。Innovation Engine 只能筛出值得投入的候选，不能证明理论原创或保证 O/F/M/国奖。
+第一个检查研究过程，第二个检查 `promoted claim → result_manifest → citation_ledger → LaTeX 章节/锚点`。两者通过只说明证据链完整，不证明理论原创或获奖。

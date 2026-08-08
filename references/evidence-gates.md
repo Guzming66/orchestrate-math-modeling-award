@@ -20,11 +20,11 @@
 
 ### G0 规则与合规
 
-核实当届官方网站、截止时间、匿名要求、文件格式、页数或大小限制、外部数据、引用和其他当届规定。把实际采用的官方来源、版本和哈希保存到 `compliance/official_sources.json`；候选链接或未填写的核验状态不能通过。
+核实当届官方网站、截止时间、匿名要求、文件格式、页数或大小限制、外部数据、引用和其他当届规定。按 [competition-profile.md](competition-profile.md) 把规则写入 `compliance/competition_profile.json`；每个官方来源保存工作区内快照、SHA-256、检查步骤和时间。不得按年份猜规则。
 
 ### G1 文献来源与真实性
 
-完整执行 [citation-integrity-audit.md](citation-integrity-audit.md)。要求每条核心外部主张在 `audits/citations/citation_ledger.csv` 中映射到已核验来源和原文定位；自动检查 DOI、BibTeX 和引用键，人工核对题录身份、原文支持、正式版本及撤稿/更正状态。文献不存在、标识符错配、原文不支持核心主张或撤稿状态未处理即阻断。
+完整执行 [citation-integrity-audit.md](citation-integrity-audit.md)。要求每条核心外部主张在 `citation_ledger.csv` 中映射到已核验来源、原文定位和本地审计 artifact/hash/check/timestamp；自动检查 DOI、BibTeX 和引用键，人工核对题录身份、原文支持、正式版本及撤稿/更正状态。文献不存在、标识符错配、原文不支持或证据断链即阻断。
 
 ### G2 数据可信度
 
@@ -32,15 +32,15 @@
 
 ### G3 分支完整性
 
-正式建模前要求 Innovation Engine 通过：候选数量和数学机制差异达到当前模式下限；晋级路线的最近先例与创新差异有原始文献定位；便宜证伪实验含同口径基线、命令、种子、结果文件和哈希；Critic 阻断项已关闭；Jury 只晋级 2–3 条路线。随后要求模型定义完整，目标与约束对应题意，代码可运行，结果由代码产生，并含基线和适当诊断。每个核心结果必须登记到 `synthesis/result_manifest.csv`，能指回命令、输入、种子、环境和文件哈希。只有算法名、只有公式、只有代码或结果台账断链均不通过。
+正式建模前要求 Innovation Claim Engine 通过：至少一个晋级 claim 具有强基线、已证明的 baseline failure、直接作用于 failure 的最小改变、最近先例、falsification，以及复杂度需要时的改变开/关 ablation；Critic 阻断项已关闭。候选数量、axis、scout 和类比只产生探索告警。随后要求最终 solution 定义完整、代码可运行、结果登记到 `result_manifest.csv`。算法名、模型堆叠或字段非空但 artifact 断链均不通过。
 
 ### G4 统计与不确定性
 
 要求关键假设接受检查，报告适合的区间或误差，结论在合理参数扰动下稳定。排名或政策结论对微小扰动翻转时，必须降级结论或重新设计。
 
-### G5 交叉模型验证
+### G5 独立与替代验证
 
-比较不同结构模型在共同数据和共同指标上的表现。解释一致与冲突的原因。不得因为三个分支使用同一套假设而宣称“独立验证”。
+至少用一个与主实现失效模式不同的验证锚点复核核心结论，例如解析特例、精确小实例、物理守恒、留出数据、改变开/关消融、替代求解器或独立重算。只有当替代模型确实检验关键假设时才增加模型分支；一个主模型加严格的独立验证可以通过。不得把同一实现换参数或多个分支共享同一套未经检验假设宣称为“交叉验证”。
 
 ### G6 独立复现
 
@@ -50,7 +50,7 @@
 
 要求摘要直接回答问题，符号单位一致，图表可读，引用可核验，关键数字可追踪，局限性真实，当届额外材料完整。运行 `finalize_submission.py`；论文必须从 `paper/main.tex` 直接构建，支撑包必须从显式清单生成并通过匿名/凭据扫描，G0—G7 全部有复核证据。`final_report.json` 不是 `pass` 即阻断。
 
-对于 CUMCM，额外要求：电子论文首页为一页摘要，无承诺书、编号页和目录；A4 四边页边距至少 2.5 cm；正文不超过 30 页；附录列支撑文件并包含全部完整可运行源程序；论文 PDF 和支撑 ZIP/RAR 分开且各不超过 20 MB；所有文件和元数据匿名。
+赛事特定的首页、目录、纸张、页数、大小、附录、支撑包和匿名要求只从已核验 competition profile 执行；本参考文件不覆盖当届官方规则。
 
 ## 分支比较矩阵
 
@@ -60,9 +60,8 @@
 - `problem_fit`
 - `assumption_risk`
 - `data_support`
-- `structural_novelty`
-- `novelty_evidence`
-- `falsification_status`
+- `innovation_claim_ids`
+- `innovation_claim_status`
 - `baseline_gain`
 - `diagnostic_quality`
 - `uncertainty_stability`
@@ -89,4 +88,4 @@
 
 ## 完成标准
 
-仅当 G0—G7 均无未关闭的 `blocking`，所有 `major` 已修复或被正文明确限定，且最终文件经过人类队员复核后，才能报告“可提交”。“可提交”不等同于获奖保证。
+每个 gate 的 `evidence` 必须是包含 `artifact_path`、`sha256`、`command_or_check` 和 `checked_at` 的对象。仅当 G0—G7 均无未关闭的 `blocking`，所有 `major` 已修复或被正文明确限定，且最终文件经过人类队员复核后，才能报告“可提交”。“可提交”不等同于获奖保证。

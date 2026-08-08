@@ -1,6 +1,6 @@
 ---
 name: orchestrate-math-modeling-award
-description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling competitions with an Innovation Engine for structure-first multi-route search, cross-domain analogy, literature novelty auditing, cheap falsification experiments, blind critic/jury elimination, plus official-rule verification, provenance, independent model branches, cross-validation, reproducibility/statistical/uncertainty audits, direct-LaTeX production, and fail-closed submission gates. Use for 国赛、全国大学生数学建模竞赛、CUMCM、美赛、MCM/ICM, especially when searching for innovative modeling ideas, splitting subproblems, comparing models, verifying novelty/sources/results, red-teaming a solution, writing LaTeX, or producing a submission package. Do not use for routine homework or an isolated coding question."
+description: "Orchestrate CUMCM/国赛 and MCM/ICM/美赛 with verified rules, an evidence-backed Innovation Claim Engine, reproducible modeling, direct-LaTeX writing, and fail-closed review. Use for contest decomposition, innovation/source/result audits, or final submission; not routine homework."
 ---
 
 # 数学建模大奖总控
@@ -13,12 +13,12 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 
 对于 CUMCM：
 
-- Stage 0 完整读取 [cumcm-format-and-submission.md](references/cumcm-format-and-submission.md)，访问其中的官方链接并记录核验日期。
+- Stage 0 完整读取 [competition-profile.md](references/competition-profile.md) 与 [cumcm-format-and-submission.md](references/cumcm-format-and-submission.md)，访问官方链接并生成当届 profile。
 - Stage 1 完整读取 [cumcm-problem-atlas.md](references/cumcm-problem-atlas.md)，按题面信号而不是 A/B/C/D/E 字母选择题型和分支。
 - Stage 8 完整读取 [cumcm-excellent-paper-benchmark.md](references/cumcm-excellent-paper-benchmark.md)、[citation-integrity-audit.md](references/citation-integrity-audit.md) 与 [latex-workflow.md](references/latex-workflow.md)。
 - Stage 9 再读格式规范、文献真实性审计、[evidence-gates.md](references/evidence-gates.md) 与 [final-submission-controls.md](references/final-submission-controls.md)，不得依赖 Stage 0 的记忆。
 
-对于 MCM/ICM，读取 [latex-workflow.md](references/latex-workflow.md)、[task-templates.md](references/task-templates.md) 和 [evidence-gates.md](references/evidence-gates.md)，并重新核对 COMAP 当届规则。
+对于 MCM/ICM，读取 [competition-profile.md](references/competition-profile.md)、[latex-workflow.md](references/latex-workflow.md)、[task-templates.md](references/task-templates.md) 和 [evidence-gates.md](references/evidence-gates.md)，并重新核对 COMAP 当届规则。
 
 凡准备把外部文献写入论文，在首次落稿前完整读取 [citation-integrity-audit.md](references/citation-integrity-audit.md)。
 
@@ -38,13 +38,14 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 1. 识别赛事、年份、题号、截止时间、比赛阶段和现有文件。无法可靠判断时再询问用户。
 2. 运行：
 
-   `python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 3 --innovation-mode <fast|standard|championship>`
+   `python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 1 --innovation-mode <fast|standard|championship>`
 
-3. 将原题和原始附件放入 `inputs/original/`，保留原件和哈希，不覆盖、不重命名原件。
-4. 在 `shared/problem_contract.md` 冻结目标、约束、数据字典、评价指标、子问依赖、允许的外部数据和交付要求。
-5. 在 `shared/problem_route.md` 记录数据模态、数学对象、目标类型、关键约束、主要不确定性和三条异质路线。
-6. 调用 `$mathmodel-skill` 建立比赛阶段与决策日志，但使用本 Skill 的题面信号路由和 LaTeX 门禁。
-7. 确认已创建论文目录，以及 `shared/task_board.csv`、`audits/gate_status.json`、`audits/data/data_provenance.csv`、`synthesis/result_manifest.csv`、匿名词表和支撑文件清单。
+3. 运行 `python scripts/preflight.py <工作区> --competition <CUMCM|MCM|ICM>`；版本或 CLI 契约不兼容时先修复。Profile 未核验时可以做明确标注为 unverified 的题面结构与基线草探，但不得启动证据晋级、论文主张或最终模型裁决。
+4. 将原题和原始附件放入 `inputs/original/`，保留原件和哈希，不覆盖、不重命名原件。
+5. 在 `shared/problem_contract.md` 冻结目标、约束、数据字典、评价指标、子问依赖、允许的外部数据和交付要求。
+6. 在 `shared/problem_route.md` 记录强基线；只有确有验证价值时才增加模型分支，分支数量不是创新指标。
+7. 调用 `$mathmodel-skill` 建立比赛阶段与决策日志，但使用本 Skill 的题面信号路由和 LaTeX 门禁。
+8. 完成并验证 `compliance/competition_profile.json`；不得用年份推断规则。
 
 ## 按题面信号路由国赛题目
 
@@ -58,21 +59,21 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 - 可验证证据：守恒、已知解、留出数据、小规模精确解、替代求解器、现场常识或专家边界；
 - 风险：不可识别、数据泄漏、量纲错误、求解超时、外推和上游误差传播。
 
-再选择至少三条在假设或数学结构上不同的路线；不要只替换优化器或调参。若题目只能支持两条可信路线，使用两条主路线加一个强基线，不凑模型数量。
+先建立一个强基线。只有当替代模型能检验关键假设、解释矛盾或降低失败风险时才增加分支；不要为数量只替换优化器或调参。
 
-## 运行 Innovation Engine
+## 运行 Innovation Claim Engine
 
 完成题面结构图后、正式建模前，完整执行 [innovation-engine.md](references/innovation-engine.md)：
 
-1. 先抽取题目特殊结构、数据生成机制、子问依赖和可验证锚点，不先报算法名。
-2. 让彼此隔离的侦察任务从机理、统计/不确定性、优化/控制、图与时空、行为/博弈及跨领域类比等不同视角发散。
-3. 把每个创新单位写成“题目结构 + 机制改变 + 可验证增益”，用 `$citation-management` 核对最近先例和原始文献；不得声称世界首创。
-4. 对入围候选先做最便宜的基线对照、边界测试或单项消融，优先证伪而不是直接做完整模型。
-5. 冻结候选后让 Critic 攻击，再让独立 Jury 执行硬否决和八维排序；不以多数投票或复杂度代替证据。
-6. `standard/championship` 只晋级 2–3 条路线，至少包含一条 `safe` 和一条 `stretch`；其余保留淘汰证据。
-7. 运行 `python scripts/validate_innovation_portfolio.py <工作区>`。报告不是 `pass` 时，不得把候选映射到正式模型分支。
+1. 建立题面结构图和最简单的强基线。
+2. 用 artifact-backed 测试证明基线在哪里、为什么失败；没有材料性失败时不制造创新。
+3. 从多个 innovation axis 寻找针对 failure 的最小充分改变；类比和多 scout 只是探索工具，数量不足只告警。
+4. 使用 `$citation-management` 核对最近先例，以 falsification、创新开/关 ablation 和稳健性证明改变有效。
+5. fusion/ensemble/hybrid 只有在组件对应不同 failure、接口明确且逐组件消融通过时才可能成为创新。
+6. Critic 先硬否决，Jury 再按 problem fit、evidence、necessity、novelty、robustness、parsimony、communication 排序；允许一个简单主方案胜出。
+7. 运行 `validate_innovation_portfolio.py`；写论文后再运行 `validate_paper_innovation.py`。两者都通过才允许宣称创新链完整。
 
-沿用 `$mathmodel-skill` 的 `fast`、`standard`、`championship` 模式控制候选数和独立视角数。不要硬编码订阅价格、固定模型名或假定 Pro/Deep Research/多代理必然可用；有高计算模式时只在结构裁决、强红队和最终 Jury 上选择性使用，并以同题评测决定是否值得。
+不要硬编码订阅价格或固定模型名；高计算模式只用于结构裁决、强红队和 Jury，并以同题评测决定价值。
 
 ## 使用隔离科学环境
 
@@ -88,13 +89,13 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 - 把程序生成的数值宏和表格写入 `paper/generated/*.tex`，图片写入 `paper/figures/`；正文只引用，不手抄结果。
 - 每次有意义的修改后运行 `python scripts/build_latex.py <工作区>/paper --competition <CUMCM|MCM|ICM> --mode draft`。
 - 草稿阶段继续使用 `build_latex.py`；最终只运行 `python scripts/finalize_submission.py <工作区>`。它统一执行全部门禁、提交模式构建、匿名扫描和支撑包生成。
-- 调用本 Skill 或 Codex 即属于使用 AI 工具。CUMCM 2026 及以后必须先重核当届规定；按 2026 试行规定，在参考文献之前放置“已使用 AI”声明，并用 `paper/ai_usage_details.tex` 生成 `AI工具使用详情.pdf` 放入支撑材料。不得选择“未使用 AI”声明或隐瞒使用情况。
+- 调用本 Skill 或 Codex 即属于使用 AI 工具。声明位置、详情 PDF 和支撑材料要求只从已核验 competition profile 执行；任何赛事都不得选择“未使用 AI”或隐瞒实际使用。
 
 ## 拆分独立任务
 
-当用户要求拆题、并行任务或交叉验证时，完整读取 [task-templates.md](references/task-templates.md)，先填写 `shared/task_board.csv` 的依赖、负责人、截止/冻结时间、后备方案、交付物和证据，再委派彼此独立且边界明确的任务。运行 `validate_task_board.py` 检查未知依赖、环和越序完成；并行写同一文件时停止并重新分配所有权。
+当用户要求拆题、并行任务或交叉验证时，完整读取 [task-templates.md](references/task-templates.md)，先填写 `shared/task_board.csv` 的依赖、负责人、截止/冻结时间、后备方案、交付物和证据，再委派彼此独立且边界明确的任务。运行 `python scripts/validate_task_board.py <工作区>` 检查未知依赖、环和越序完成；并行写同一文件时停止并重新分配所有权。
 
-要求每个建模分支至少交付：题意解释与假设；数学定义、目标与约束；基线与主模型；可运行代码、环境和随机种子；结果生成路径；适配风险的验证与稳健性证据；失败边界；一页内分支摘要。
+要求每个实际创建的建模分支至少交付：题意解释与假设；数学定义、目标与约束；强基线；可运行代码、环境和随机种子；结果生成路径；适配风险的验证与稳健性证据；失败边界；一页内分支摘要。
 
 不要向独立分支泄露预期答案、其他分支结果、优秀论文的具体解法或主任务偏好。
 
@@ -107,7 +108,7 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 3. 数据质量；
 4. 分支模型完整性；
 5. 统计、量纲与不确定性；
-6. 异质模型交叉验证；
+6. 独立验证；有必要时才增加异质模型或替代求解器；
 7. 独立复现；
 8. 论文、LaTeX、附件和提交。
 
@@ -126,7 +127,7 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 - 摘要逐问写“方法 + 可追溯结果 + 验证/边界”，但不机械模仿展示论文段落。
 - 统一符号、单位、有效数字、图例和表格口径；明确假设、验证、敏感性、优缺点与适用边界。
 - 只合并 `audits/citations/citation_ledger.csv` 中身份、元数据和论点支持均已通过的引用；核心主张保留页码、章节、公式、表格或图号等原文定位。
-- CUMCM 论文附录同时列出支撑材料文件并包含完整可运行源程序；支撑压缩包再包含同一版本代码、外部数据和必要中间结果。
+- 当 verified competition profile 要求时，论文附录列出支撑材料文件并包含完整可运行源程序；支撑压缩包再包含同一版本代码、外部数据和必要中间结果。
 - 按当届官方规则完成明确要求的声明或额外材料。
 
 ## 统一终审
@@ -135,7 +136,7 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 
 `python scripts/finalize_submission.py <工作区>`
 
-该命令必须重新快照环境、校验任务依赖、核对官方来源、文献台账、输入与结果哈希、复现状态、证据矩阵和八道门禁，直接编译 LaTeX，并在 CUMCM 下从显式清单生成支撑 ZIP、扫描身份/凭据并输出论文与压缩包哈希。只有 `audits/submission/final_report.json` 为 `pass` 时才允许报告“可提交”。
+该命令必须重新快照环境、校验任务依赖、核对官方来源、文献台账、输入与结果哈希、复现状态、证据矩阵和八道门禁，直接编译 LaTeX，并在 profile 要求时从显式清单生成支撑 ZIP、扫描身份/凭据并输出论文与压缩包哈希。只有 `audits/submission/final_report.json` 为 `pass` 时才允许报告“可提交”。
 
 ## 使用 Ponytail 的边界
 
@@ -143,4 +144,4 @@ description: "Orchestrate high-stakes CUMCM and MCM/ICM mathematical modeling co
 
 ## 停止条件
 
-出现以下任一情况时不得宣称可提交：官方规则未核实；Innovation Engine 未通过、创新最近先例未核实或入围方案仍有开放阻断项；任务依赖未关闭；输入或结果未登记、哈希不符；核心结果无法独立复现；单位或统计假设矛盾；分支冲突未解释；文献不存在、标识符与题录不匹配、正文主张超出原文、撤稿或更正状态未处理；匿名词表未配置；支撑清单、归档扫描或八道门禁未通过；论文不是从 `paper/main.tex` 直接生成；最终 PDF 未逐页目视检查；`final_report.json` 不是 `pass`。
+出现以下任一情况时不得宣称可提交：competition profile 未核验或 source artifact/hash 失配；Innovation Claim Engine 或论文创新审计未通过；创新最近先例未核实；入围 claim 没有 baseline failure、最小改变、证伪/消融或论文落点；任务依赖未关闭；输入、结果或 gate evidence 未登记或哈希不符；核心结果无法独立复现；统计/单位/分支冲突未解释；引用身份或原文支持不成立；匿名、支撑包、LaTeX、逐页检查或最终报告未通过。

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "workflow_version": 8,
+  "python_minimum": "3.10",
+  "companion_skills": [
+    {
+      "name": "mathmodel-skill",
+      "required_files": ["SKILL.md"],
+      "version_marker": "v6.1",
+      "required": true
+    },
+    {
+      "name": "citation-management",
+      "required_files": ["SKILL.md", "scripts/validate_citations.py"],
+      "cli_flags": ["--check-dois", "--report"],
+      "required": true
+    }
+  ],
+  "commands": {
+    "all": ["pdfinfo"],
+    "CUMCM": ["xelatex"],
+    "MCM": ["pdflatex"],
+    "ICM": ["pdflatex"]
+  }
+}

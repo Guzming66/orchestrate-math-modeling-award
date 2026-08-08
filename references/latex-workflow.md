@@ -42,7 +42,7 @@ python <skill>/scripts/build_latex.py <workspace>/paper --competition MCM --mode
 
 构建工具调用 `latexmk`，自动完成必要的 BibTeX 轮次，不依赖 Pandoc。草稿模式允许明确的标题和队号占位符；提交模式将其视为阻断项。
 
-对 CUMCM 主论文，提交模式还检查 PDF 为 A4、文件不超过 20 MB、Author 元数据为空、源码没有 `\tableofcontents`，并要求模板输出正文页数标记。模板自身强制摘要只占第一页和正文不超过 30 页。自动检查不能替代匿名与附件人工审计。
+构建器只负责直编 LaTeX、通用占位符/日志检查并报告页数、正文起点、纸张、大小和元数据；它不从比赛名称或年份猜规则。`finalize_submission.py` 只按已核验 `competition_profile.json` 执行 A4、页数、大小、目录、匿名性和附加材料门禁。自动检查不能替代匿名与附件人工审计。
 
 每次新增公式、表格、图片、引用或章节后重新构建。不要等到最后才发现宏包、浮动体或交叉引用问题。读取 `paper/build/build_report.json`，修复所有 `errors`；逐项判断 `warnings`。
 
@@ -76,7 +76,7 @@ python <citation-management>/scripts/validate_citations.py <workspace>/paper/ref
 
 没有引用时不要创建这个文件，从而避免空 BibTeX 任务引发无意义的构建错误。
 
-若当届规则要求 AI 或其他工具使用说明，直接用相应 `.tex` 模板生成 PDF；不要先生成 Word 或 Markdown 再转换。本 Skill 不增加超出官方规则的披露要求。
+若当届规则要求 AI 或其他工具使用说明，直接用相应 `.tex` 模板生成 PDF；不要先生成 Word 或 Markdown 再转换。把实质使用登记到 `compliance/ai_usage_ledger.csv`，并按 profile 检查正文锚点、工具引用、人工修改/核验、交互证据和官方文件名。本 Skill 不把某届或某赛事的披露位置套用到另一届。
 
 需要生成国赛 AI 使用说明时，可运行：
 
@@ -84,11 +84,11 @@ python <citation-management>/scripts/validate_citations.py <workspace>/paper/ref
 python <skill>/scripts/build_latex.py <workspace>/paper --competition CUMCM --main ai_usage_details.tex --mode submission
 ```
 
-最终器会把直编结果命名为 `paper/build/AI工具使用详情.pdf`，并要求支撑清单包含它；打包时该文件位于压缩包根目录。美赛的相应内容可写入 `paper/sections/99_ai_report.tex`，由主论文按当届版面规则编译。
+最终器会按 verified profile 的 `details_filename` 命名直编结果，并要求支撑清单包含该文件；打包位置同样由清单决定。美赛的相应内容可写入 `paper/sections/99_ai_report.tex`，由主论文按当届版面规则编译。
 
 ## CUMCM 附录与支撑材料同步
 
-2026 格式规范要求论文附录包含支撑材料文件列表和全部完整、可运行的源程序，支撑压缩包也应包含同版本程序。不要只在附录写“代码见附件”。
+当已核验 profile 及其官方快照要求论文附录包含支撑材料文件列表和完整、可运行的源程序时，支撑压缩包也必须包含同版本程序。不要把某届历史要求静默继承到下一届。
 
 - 从冻结的 `branches/` 或统一代码目录生成一次只读提交快照。
 - 在 `paper/sections/90_appendix.tex` 先列文件清单、入口命令、依赖、随机种子和对应正文小节，再用 `\lstinputlisting` 或等价 LaTeX 方式纳入完整文本源程序。
@@ -99,10 +99,10 @@ python <skill>/scripts/build_latex.py <workspace>/paper --competition CUMCM --ma
 ## 提交检查
 
 1. 填完 `final-submission-controls.md` 的台账与门禁后，运行 `finalize_submission.py`；不要单独把一次 LaTeX 编译成功当成终审通过。
-2. 确认编译报告无错误，无未解析引用、缺字、占位符、严重超宽、非 A4、匿名元数据和文件大小违规。
+2. 确认编译报告无错误，并由 profile validator 确认未解析引用、缺字、占位符、严重超宽、纸张、匿名元数据、页数和文件大小均符合当届要求。
 3. 用 `pdfinfo` 复核页数、纸张尺寸和 PDF 元数据，并用文件系统复核大小。
 4. 用 `pdftoppm` 渲染全部页面，不只抽查第一页。
 5. 逐页检查裁切、重叠、孤行、空白页、浮动体漂移、公式编号、图表清晰度、页眉页码和匿名信息。
 6. 对照当届官方规则核对页数计数口径和额外材料位置。
-7. 对 CUMCM 检查附录源程序与支撑包同版本、各文件匿名且支撑包不超过 20 MB；当届要求额外材料时按官方规则核对。
+7. 对照已核验 profile 检查附录、支撑包、匿名性和大小；当届要求额外材料时按官方快照核对。
 8. 确认 `final_report.json` 与 `submission_manifest.json` 均为通过状态并保存论文/支撑包哈希；不提交临时辅助文件。
