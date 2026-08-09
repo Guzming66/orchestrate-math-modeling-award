@@ -26,7 +26,7 @@
 使用 $orchestrate-math-modeling 为这道国赛题建立总控工作区。先冻结三个小题的统一问题契约，再核验当届官方规则并生成带 source locator 和 hash 的 Competition Profile v2。每个小题先做强基线，只在真实失败证据支持时增加候选或创新改动；模型冻结后进行独立科学、统计和主张审查。论文只使用 LaTeX。
 ```
 
-安装后 Skill 的详细执行规则见 `SKILL.md`。Skill 标识已经改为 `orchestrate-math-modeling`；GitHub 仓库在完成远端改名前仍使用原地址：<https://github.com/Guzming66/orchestrate-math-modeling-award>
+安装后 Skill 的详细执行规则见 `SKILL.md`。仓库地址：<https://github.com/Guzming66/orchestrate-math-modeling>
 
 ## 证据等级
 
