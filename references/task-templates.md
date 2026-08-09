@@ -118,7 +118,13 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 任务说明：只使用通过门禁的结果，不重新计算或发明数字。
 
-建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 映射到 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留假设、验证、敏感性、局限和当届声明。每次合并后直接编译 LaTeX。
+建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 映射到 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX。
+
+## 科研制图审计
+
+任务说明：如已安装则使用 `$scientific-visualization`；否则按 `cumcm-paper-writing-and-figures.md` 直接审计，不改变数据或模型结果。
+
+逐图记录论点职责、源数据、变换、脚本、随机种子、单位、区间定义、输出路径和哈希。检查坐标尺度、缺失值、平滑/归一化、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/PNG 放入 `paper/figures/`。
 
 ## LaTeX 与提交包审计
 

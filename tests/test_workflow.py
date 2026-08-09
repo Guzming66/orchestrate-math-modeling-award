@@ -16,6 +16,7 @@ SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from finalize_submission import check_ai_compliance, check_data_provenance, finalize
+from build_latex import scan_sources
 from migrate_workspace import migrate
 from package_submission import package_workspace
 from score_claim_benchmark import score
@@ -74,6 +75,38 @@ class WorkflowTests(unittest.TestCase):
             "command_or_check": "manual fixture verification",
             "checked_at": STAMP,
         }
+
+    def test_submission_source_audit_keeps_internal_artifacts_out_of_paper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            paper = Path(temporary)
+            sections = paper / "sections"
+            sections.mkdir()
+            (sections / "00_abstract.tex").write_text(
+                "结果良好，详见\\cite{demo}。\\[x=1\\]\n",
+                encoding="utf-8",
+            )
+            (sections / "03_question.tex").write_text(
+                "证据见 audits/results.json，artifact_path 与 sha256 已记录。\n",
+                encoding="utf-8",
+            )
+            errors, warnings = scan_sources(paper, "submission")
+            self.assertTrue(any("artifact_path" in item for item in errors))
+            self.assertTrue(any("audits path" in item for item in errors))
+            self.assertTrue(any("vague result quality" in item for item in warnings))
+            self.assertTrue(any("contains a citation" in item for item in warnings))
+            self.assertTrue(any("displayed mathematics" in item for item in warnings))
+
+    def test_cumcm_initializer_uses_lean_question_level_latex_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.initialize(root)
+            main = (root / "paper" / "main.tex").read_text(encoding="utf-8")
+            self.assertIn("generated/question_sections.tex", main)
+            self.assertNotIn("01_problem_restatement.tex", main)
+            self.assertTrue((root / "paper" / "sections" / "questions").is_dir())
+            self.assertTrue((root / "paper" / "sections" / "01_task_analysis.tex").is_file())
+            appendix = (root / "paper" / "sections" / "90_appendix.tex").read_text(encoding="utf-8")
+            self.assertNotIn("DRAFT CONTENT", appendix)
 
     def complete_profile(self, root: Path, competition: str = "CUMCM") -> None:
         source = self.make_artifact(root, "audits/rules/official-rules.html")

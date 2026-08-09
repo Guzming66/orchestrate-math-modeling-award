@@ -19,6 +19,31 @@ ENGINE_BY_COMPETITION = {
     "ICM": "pdflatex",
 }
 PLACEHOLDERS = ("DRAFT TITLE", "DRAFT KEYWORDS", "DRAFT CONTENT", "0000000")
+INTERNAL_PAPER_PATTERNS = (
+    (r"\bartifact_path\b", "internal evidence field artifact_path"),
+    (r"\bsha256\b", "internal SHA-256 field"),
+    (r"\bworkflow_stage\b", "internal workflow stage"),
+    (r"\btask_board\b", "internal task board"),
+    (r"\bdecision_log\b", "internal decision log"),
+    (r"\bmodel_selection\.json\b", "internal model-selection file"),
+    (r"\binnovation_claims\.csv\b", "internal innovation ledger"),
+    (r"\bresult_manifest\.csv\b", "internal result manifest"),
+    (r"\bfinal_report\.json\b", "internal final report"),
+    (r"\baudits[\\/]", "internal audits path"),
+    (r"\bbranches[\\/]", "internal branch path"),
+    (r"\bsynthesis[\\/]", "internal synthesis path"),
+)
+LEAN_PAPER_WARNINGS = (
+    (r"\\section\*?\{问题重述\}", "standalone problem restatement is usually redundant"),
+    (r"\\section\*?\{模型评价与推广\}", "generic evaluation/extension section should be evidence-specific"),
+    (r"\\section\*?\{(?:模型)?优点(?:与|和)缺点\}", "generic strengths/weaknesses list should be replaced with concrete limits"),
+    (r"\\section\*?\{创新点\}", "standalone innovation slogan section should be mapped to evidence in context"),
+    (r"结果(?:较为)?良好", "replace vague result quality with a metric or boundary"),
+    (r"精度较高", "replace vague accuracy with a metric or interval"),
+    (r"大大提高", "replace promotional language with a measured comparison"),
+    (r"显而易见", "state the derivation or observable evidence"),
+    (r"充分证明", "calibrate proof language to the available evidence"),
+)
 BLOCKING_LOG_PATTERNS = (
     (r"^! LaTeX Error:", "LaTeX error"),
     (r"Undefined control sequence", "undefined control sequence"),
@@ -124,20 +149,37 @@ def strip_tex_comments(text: str) -> str:
     return "\n".join(cleaned)
 
 
-def scan_sources(paper_dir: Path, mode: str) -> list[str]:
+def scan_sources(paper_dir: Path, mode: str) -> tuple[list[str], list[str]]:
     if mode != "submission":
-        return []
+        return [], []
     errors: list[str] = []
+    warnings: list[str] = []
     for path in paper_dir.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in {".tex", ".bib"}:
             continue
-        if "build" in path.relative_to(paper_dir).parts:
+        relative = path.relative_to(paper_dir)
+        if "build" in relative.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for placeholder in PLACEHOLDERS:
             if placeholder in text:
-                errors.append(f"placeholder '{placeholder}' remains in {path.relative_to(paper_dir)}")
-    return errors
+                errors.append(f"placeholder '{placeholder}' remains in {relative}")
+
+        if "sections" not in relative.parts:
+            continue
+        visible = strip_tex_comments(text)
+        for pattern, message in INTERNAL_PAPER_PATTERNS:
+            if re.search(pattern, visible, flags=re.IGNORECASE | re.MULTILINE):
+                errors.append(f"{message} leaked into final paper source: {relative}")
+        for pattern, message in LEAN_PAPER_WARNINGS:
+            if re.search(pattern, visible, flags=re.MULTILINE):
+                warnings.append(f"{message}: {relative}")
+        if relative.name in {"00_abstract.tex", "00_summary.tex"}:
+            if re.search(r"\\cite[tp]?\s*\{", visible):
+                warnings.append(f"abstract/summary contains a citation; keep it only if indispensable: {relative}")
+            if re.search(r"\\begin\{(?:equation|align|gather)\*?\}|\\\[", visible):
+                warnings.append(f"abstract/summary contains displayed mathematics; prefer a result map: {relative}")
+    return errors, warnings
 
 
 def scan_log(log_text: str, mode: str) -> tuple[list[str], list[str]]:
@@ -227,8 +269,7 @@ def main() -> int:
         report_path = build_dir / f"build_report_{main_path.stem}.json"
         stdout_path = build_dir / f"build_stdout_{main_path.stem}.log"
 
-    errors = scan_sources(paper_dir, args.mode)
-    warnings: list[str] = []
+    errors, warnings = scan_sources(paper_dir, args.mode)
     engine = args.engine or ENGINE_BY_COMPETITION.get(args.competition or "", "")
     if not engine:
         errors.append("LaTeX engine is not specified; use --engine or the legacy --competition shortcut")

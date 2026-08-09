@@ -18,6 +18,8 @@
 
 强烈建议：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`。
 
+科研制图可选：`scientific-visualization`。推荐核验来源为 [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-visualization)；未安装时总控仍按内置的 CUMCM 图表规范工作，不把它设为硬依赖。
+
 这六个 Skill 可以覆盖完整建模与论文流程，但仍需要参赛队员做题意判断、核实当届官方规则、检查代码和数据、审阅引用、确认 AI 披露并完成正式提交。
 
 ## 快速开始

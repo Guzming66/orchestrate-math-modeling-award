@@ -22,14 +22,18 @@
 paper/
   main.tex                  仅论文总编修改
   generated/metadata.tex    仅论文总编修改
+  generated/question_sections.tex  按实际小题载入独立章节
   generated/*.tex           程序生成表格与数值宏
   sections/*.tex            每个写作任务独占一个文件
+  sections/questions/qNN.tex 每个小题独占一个文件
   figures/                  程序生成的 PDF/PNG 图片
   references.bib            仅文献管理员或论文总编修改
   build/                    编译输出和 build_report.json
 ```
 
 不要让两个任务同时编辑同一个 `.tex` 或 `.bib` 文件。章节任务只返回分配文件的完整内容和所需引用键；论文总编负责合并引用库与主文件。
+
+CUMCM 不默认创建独立“问题重述”“符号说明”“模型评价与推广”和重复结论章。把任务关系写入 `01_task_analysis.tex`，把真正使用的假设、数据处理和符号合并到 `02_foundation.tex`，再由 `generated/question_sections.tex` 载入逐问章节。全局验证、跨问综合、AI 声明和附录均为条件内容，只在证据或 verified profile 要求时出现。具体语言与制图规则见 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md)。
 
 ## 构建循环
 
@@ -51,6 +55,8 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine pdflatex --mode
 - 把可复现数值写成 `paper/generated/results.tex` 中的 LaTeX 宏，再在正文引用；不要在多处手抄数字。
 - 把程序生成的表格写成不含 `table` 外壳的 `.tex` 片段，由正文负责标题、标签和浮动位置。
 - 优先使用矢量 PDF 图片；栅格图使用足够分辨率并嵌入字体。所有坐标轴、图例和单位必须在最终页面尺寸下可读。
+- 如已安装 `$scientific-visualization`，用它完成诚实编码、颜色/灰度、区间含义和导出审计；否则按 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md) 执行同等检查。
+- 每幅图只承担一个主要证据职责；删除装饰性流程图、重复表格内容的图和没有参与论证的输出。
 - 为公式、图、表和章节设置稳定且唯一的标签前缀，如 `eq:`、`fig:`、`tab:`、`sec:`。
 - 避免直接使用 Unicode 数学符号代替 LaTeX 命令，避免复制不可见空格和特殊连字符。
 - 对宽表优先重构列、减少无意义小数或转为附录，不用整体缩小到不可读。
@@ -91,7 +97,7 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine xelatex --main 
 当已核验 profile 及其官方快照要求论文附录包含支撑材料文件列表和完整、可运行的源程序时，支撑压缩包也必须包含同版本程序。不要把某届历史要求静默继承到下一届。
 
 - 从冻结的 `branches/` 或统一代码目录生成一次只读提交快照。
-- 在 `paper/sections/90_appendix.tex` 先列文件清单、入口命令、依赖、随机种子和对应正文小节，再用 `\lstinputlisting` 或等价 LaTeX 方式纳入完整文本源程序。
+- 仅当 verified profile 要求时，在 `paper/sections/90_appendix.tex` 先列文件清单、入口命令、依赖、随机种子和对应正文小节，再用 `\lstinputlisting` 或等价 LaTeX 方式纳入完整文本源程序；否则保持该文件为空，不生成附录标题。
 - 对 Notebook、Excel、SPSS 等保留可运行文件，并按官方要求在论文附录提供完整代码或交互命令；不要用截图代替文本。
 - 支撑 ZIP/RAR 只放与论文一致的代码、外部数据、必要中间结果和当届要求的额外材料；排除原始赛题附件、临时缓存、环境目录、身份、密码与令牌。
 - 比较论文附录清单、支撑包清单和复现日志。任一文件缺失或版本不一致即阻断。

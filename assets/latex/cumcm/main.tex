@@ -9,10 +9,19 @@
 
 \graphicspath{{figures/}}
 \hypersetup{unicode=true,hidelinks,pdfauthor={},pdfsubject={},pdfkeywords={}}
-\captionsetup{font=small,labelfont=bf}
+\captionsetup{font=small,labelfont=bf,labelsep=quad,skip=5pt}
 \setlength{\parindent}{2em}
 \setlength{\parskip}{0pt}
 \linespread{1.25}
+\setlength{\abovedisplayskip}{7pt plus 2pt minus 2pt}
+\setlength{\belowdisplayskip}{7pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlist{topsep=0.4em,itemsep=0.2em,parsep=0pt}
+\ctexset{
+  section={format=\zihao{4}\bfseries,beforeskip=1.2ex,afterskip=0.8ex},
+  subsection={format=\zihao{-4}\bfseries,beforeskip=1.0ex,afterskip=0.6ex},
+  subsubsection={format=\zihao{-4}\bfseries,beforeskip=0.8ex,afterskip=0.4ex}
+}
 \lstset{basicstyle=\small\ttfamily,breaklines=true,frame=single,numbers=left,
   numberstyle=\tiny,showstringspaces=false,columns=fullflexible,keepspaces=true}
 
@@ -32,7 +41,7 @@
 
 \begin{center}
   {\zihao{3}\bfseries \PaperTitle\par}
-  \vspace{1em}
+  \vspace{0.6em}
   {\zihao{4}\bfseries 摘要}
 \end{center}
 \input{sections/00_abstract.tex}
@@ -42,14 +51,11 @@
 \typeout{MATHMODEL:FRONT_MATTER_PAGES=\number\numexpr\value{page}-1\relax}
 \setcounter{mathawardbodystartpage}{\value{page}}
 
-\input{sections/01_problem_restatement.tex}
-\input{sections/02_problem_analysis.tex}
-\input{sections/03_assumptions.tex}
-\input{sections/04_notation.tex}
-\input{sections/05_models.tex}
-\input{sections/06_robustness.tex}
-\input{sections/07_evaluation.tex}
-\input{sections/08_conclusion.tex}
+\input{sections/01_task_analysis.tex}
+\input{sections/02_foundation.tex}
+\input{generated/question_sections.tex}
+\InputIfFileExists{sections/06_global_validation.tex}{}{}
+\InputIfFileExists{sections/07_synthesis_and_limits.tex}{}{}
 \ifIncludeAIUsageStatement\input{sections/09_ai_statement.tex}\fi
 \IfFileExists{generated/bibliography.tex}{\input{generated/bibliography.tex}}{}
 
@@ -58,5 +64,5 @@
 \typeout{MATHMODEL:BODY_PAGES=\arabic{mathawardbodypages}}
 
 \appendix
-\input{sections/90_appendix.tex}
+\InputIfFileExists{sections/90_appendix.tex}{}{}
 \end{document}

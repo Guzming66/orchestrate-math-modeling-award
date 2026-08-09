@@ -100,10 +100,12 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 ## LaTeX 唯一真源
 
-写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)。
+写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)；CUMCM 中文论文同时完整读取 [cumcm-paper-writing-and-figures.md](references/cumcm-paper-writing-and-figures.md)。
 
 - 最终论文只维护 `paper/main.tex`、分章节 `.tex`、`paper/generated/*.tex`、`paper/figures/` 和 `paper/references.bib`。
 - 不经 Word、Markdown、HTML、Notebook、Pandoc 或其他格式转换生成最终正文。
+- 不把题面复述、候选池、Agent 分工、内部评分、artifact 路径、哈希、调试过程或泛化优缺点套话写入最终论文；这些内容留在审计与复现台账。
+- 按实际小题建立独立 `.tex` 文件，每问就地完成“模型—结果—验证—边界”，只在跨问风险确实存在时单列全局稳健性章节。
 - 草稿构建使用 profile 中的 engine：
 
   `python scripts/build_latex.py <workspace>/paper --engine xelatex --mode draft`
@@ -118,6 +120,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - `$statistical-analysis`：统计设计、诊断、效应与区间。
 - `$uncertainty-and-units`：单位、量纲、误差传播与量级检查。
 - `$scientific-critical-thinking`：独立科学审查与主张边界。
+- 可选 `$scientific-visualization`：设计并审计诚实、可复现、适合最终 LaTeX 栏宽的科研图；未安装时遵守本 Skill 的同一图表规范直接使用 Matplotlib/Seaborn。
 
 拆成小题任务或独立验证任务时完整读取 [task-templates.md](references/task-templates.md)。每个任务只写自己的目录；共享符号、数据版本和接口由总控冻结。不要把预期答案、其他分支结论或优秀论文具体解法泄露给独立验证任务。
 

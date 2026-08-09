@@ -92,24 +92,19 @@ def paper_sections(competition: str) -> dict[str, str]:
     if competition == "CUMCM":
         return {
             "00_abstract.tex": "本文为可直接编译的草稿。DRAFT CONTENT\n",
-            "01_problem_restatement.tex": "\\section{问题重述}\nDRAFT CONTENT\n",
-            "02_problem_analysis.tex": "\\section{问题分析}\nDRAFT CONTENT\n",
-            "03_assumptions.tex": "\\section{模型假设}\nDRAFT CONTENT\n",
-            "04_notation.tex": "\\section{符号说明}\nDRAFT CONTENT\n",
-            "05_models.tex": "\\section{模型建立与求解}\nDRAFT CONTENT\n",
-            "06_robustness.tex": "\\section{敏感性与稳健性分析}\nDRAFT CONTENT\n",
-            "07_evaluation.tex": "\\section{模型评价与推广}\nDRAFT CONTENT\n",
-            "08_conclusion.tex": "\\section{结论}\nDRAFT CONTENT\n",
+            "01_task_analysis.tex": "\\section{任务分析与问题关系}\nDRAFT CONTENT\n",
+            "02_foundation.tex": "\\section{建模基础}\nDRAFT CONTENT\n",
+            "06_global_validation.tex": (
+                "% Optional: include only when several questions share one material risk or uncertainty source.\n"
+            ),
+            "07_synthesis_and_limits.tex": (
+                "% Optional: include only for cross-question synthesis or concrete limits not stated with results.\n"
+            ),
             "09_ai_statement.tex": (
-                "\\section*{AI工具使用声明}\n"
-                "本参赛队在竞赛过程中使用了AI工具，主要用于【DRAFT CONTENT】，详细使用情况见支撑材料。\n"
+                "% Populate and enable only when the verified competition profile requires an in-paper statement.\n"
             ),
             "90_appendix.tex": (
-                "\\section{支撑材料文件清单}\n"
-                "DRAFT CONTENT\n\n"
-                "\\section{完整源程序}\n"
-                "% Use \\lstinputlisting to include every runnable source file.\n"
-                "DRAFT CONTENT\n"
+                "% Populate only when the verified competition profile requires an appendix.\n"
             ),
         }
     return {
@@ -136,7 +131,13 @@ def initialize_paper(root: Path, competition: str, problem: str) -> None:
         root / "paper",
     )
 
-    for relative in ("paper/sections", "paper/generated", "paper/figures", "paper/build"):
+    for relative in (
+        "paper/sections",
+        "paper/sections/questions",
+        "paper/generated",
+        "paper/figures",
+        "paper/build",
+    ):
         (root / relative).mkdir(parents=True, exist_ok=True)
 
     for filename, content in paper_sections(competition).items():
@@ -161,7 +162,11 @@ def initialize_paper(root: Path, competition: str, problem: str) -> None:
     if competition == "CUMCM":
         write_text_if_missing(
             root / "paper" / "generated" / "ai_usage_entries.tex",
-            "% Record tool name/version, purpose/stage, prompting/use process, and adoption/manual verification.\n"
+            "% Populate only when the verified competition profile requires a separate AI-use details PDF.\n",
+        )
+        write_text_if_missing(
+            root / "paper" / "generated" / "question_sections.tex",
+            "% Replace with one \\input{sections/questions/qNN.tex} line per actual subproblem.\n"
             "DRAFT CONTENT\n",
         )
     write_text_if_missing(
