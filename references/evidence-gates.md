@@ -13,6 +13,7 @@ v9 不再维护重复的 G0—G7 人工总表。每类判断由最接近证据�
 - 引用身份错误、原文不支持、正式版本/更正撤稿状态未检查；
 - 独立审查仍有 unresolved critical，或 open major 超过 policy；
 - 摘要、正文或结论出现无法映射到结果/文献/innovation claim 的强主张；
+- CUMCM 冻结的小题没有与非空 LaTeX 小题章节一一对应；
 - profile 要求的产物缺失、归档路径错误、匿名/凭据扫描失败；
 - LaTeX 构建、页数/纸张/大小或最终 hash 检查失败。
 

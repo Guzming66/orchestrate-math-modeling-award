@@ -31,4 +31,6 @@ python scripts/finalize_submission.py <workspace>
 
 Finalizer 调用专门 validators，验证状态与产物后才进行 submission-mode LaTeX build 和打包。上游阻断时跳过正式构建，防止产生“看起来可提交”的文件。
 
+对 CUMCM，`validate_paper_question_coverage.py` 还会把冻结的核心小题与 `paper/generated/question_sections.tex` 一一对齐：少载、重复载入、章节缺失或仍为草稿均阻断。它只能证明“没有漏掉章节”，不能替代对每问是否真正作答的科学与主张审查。
+
 只有 `audits/submission/final_report.json` 为 `pass` 时才生成 `submission/submission_manifest.json`。Manifest 保存论文、AI 详情和支撑包的最终 hash。队员仍需逐页查看 PDF、核对上传界面与官方截止时间，并亲自完成提交。

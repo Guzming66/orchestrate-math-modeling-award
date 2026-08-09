@@ -8,7 +8,7 @@
 - Model Selection Engine：按小题记录强基线、候选、拟合前理由、拟合后证据、最终选择和淘汰理由；简单模型可以胜出。
 - Innovation Claim Engine：只为已证明的 baseline failure 提出最小必要改变，并用先例、证伪、消融和论文落点支持。
 - Scientific Review Engine：统一进行科学、统计和主张审查，critical/major 必须有真实证据产物。
-- Submission Finalizer：不猜赛事规则，只执行 verified profile、验证状态、文件与哈希，直接构建 LaTeX。
+- Submission Finalizer：不猜赛事规则，只执行 verified profile、验证状态、文件与哈希；CUMCM 还核对每个冻结小题与非空 LaTeX 章节一一对应，再直接构建 LaTeX。
 
 工作流采用五个阶段：`rule_verification → exploration → model_freeze → paper_freeze → submission`。默认使用 `standard`；`championship` 加强独立审查与稳健性，但不强制增加模型或计算量。
 
@@ -37,7 +37,7 @@
 - E2：由不知道版本信息的独立评阅者比较论文质量。
 - E3：多届真实赛事外部结果；仅作观察，不能把获奖归因于本 Skill。
 
-当前公开结论只到 E0。仓库中的 benchmark 是离线质量评估工具，不输出获奖率，也不参与赛中终审。
+当前公开结论只到 E0。写作规范另由用户本地 2022–2025 年 47 篇/2379 页优秀论文语料作描述性结构校准，方法与聚合计数见 `references/cumcm-corpus-evidence-2022-2025.md`；原论文、OCR 文本和逐篇卡不随仓库分发。该语料校准不等同于 E1 解题演练，不输出获奖率，也不参与赛中终审。
 
 ## 设计底线
 

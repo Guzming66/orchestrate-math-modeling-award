@@ -35,7 +35,9 @@ INTERNAL_PAPER_PATTERNS = (
 )
 LEAN_PAPER_WARNINGS = (
     (r"\\section\*?\{问题重述\}", "standalone problem restatement is usually redundant"),
-    (r"\\section\*?\{模型评价与推广\}", "generic evaluation/extension section should be evidence-specific"),
+    (r"\\section\*?\{符号(?:说明|约定)\}", "standalone notation section should be kept only when symbols are dense and reused"),
+    (r"\\section\*?\{模型(?:评价|评估)(?:与推广)?\}", "generic evaluation section should be evidence-specific"),
+    (r"\\section\*?\{模型推广\}", "generic extension section should state a concrete transfer condition"),
     (r"\\section\*?\{(?:模型)?优点(?:与|和)缺点\}", "generic strengths/weaknesses list should be replaced with concrete limits"),
     (r"\\section\*?\{创新点\}", "standalone innovation slogan section should be mapped to evidence in context"),
     (r"结果(?:较为)?良好", "replace vague result quality with a metric or boundary"),
@@ -43,6 +45,8 @@ LEAN_PAPER_WARNINGS = (
     (r"大大提高", "replace promotional language with a measured comparison"),
     (r"显而易见", "state the derivation or observable evidence"),
     (r"充分证明", "calibrate proof language to the available evidence"),
+    (r"具有(?:较强|良好)的(?:鲁棒性|稳健性|普适性|适用性)", "replace generic robustness/applicability with a tested boundary"),
+    (r"验证了模型的(?:正确性|准确性|有效性)", "name the validation target, metric and observed result"),
 )
 BLOCKING_LOG_PATTERNS = (
     (r"^! LaTeX Error:", "LaTeX error"),
@@ -174,6 +178,10 @@ def scan_sources(paper_dir: Path, mode: str) -> tuple[list[str], list[str]]:
         for pattern, message in LEAN_PAPER_WARNINGS:
             if re.search(pattern, visible, flags=re.MULTILINE):
                 warnings.append(f"{message}: {relative}")
+        if relative.name != "90_appendix.tex" and re.search(
+            r"\\lstinputlisting|\\begin\{(?:lstlisting|verbatim)\}", visible
+        ):
+            warnings.append(f"full code listing should stay in the profile-designated appendix/support package: {relative}")
         if relative.name in {"00_abstract.tex", "00_summary.tex"}:
             if re.search(r"\\cite[tp]?\s*\{", visible):
                 warnings.append(f"abstract/summary contains a citation; keep it only if indispensable: {relative}")

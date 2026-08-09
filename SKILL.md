@@ -100,12 +100,12 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 ## LaTeX 唯一真源
 
-写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)；CUMCM 中文论文同时完整读取 [cumcm-paper-writing-and-figures.md](references/cumcm-paper-writing-and-figures.md)。
+写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)；CUMCM 中文论文同时完整读取 [cumcm-paper-writing-and-figures.md](references/cumcm-paper-writing-and-figures.md) 与其证据底稿 [cumcm-corpus-evidence-2022-2025.md](references/cumcm-corpus-evidence-2022-2025.md)。
 
 - 最终论文只维护 `paper/main.tex`、分章节 `.tex`、`paper/generated/*.tex`、`paper/figures/` 和 `paper/references.bib`。
 - 不经 Word、Markdown、HTML、Notebook、Pandoc 或其他格式转换生成最终正文。
 - 不把题面复述、候选池、Agent 分工、内部评分、artifact 路径、哈希、调试过程或泛化优缺点套话写入最终论文；这些内容留在审计与复现台账。
-- 按实际小题建立独立 `.tex` 文件，每问就地完成“模型—结果—验证—边界”，只在跨问风险确实存在时单列全局稳健性章节。
+- 按实际小题建立独立 `.tex` 文件，每问就地完成“任务与依赖—模型—结果—验证/边界—下游接口”，并核对题目要求的表格与结果文件；只在跨问风险确实存在时单列全局稳健性章节。
 - 草稿构建使用 profile 中的 engine：
 
   `python scripts/build_latex.py <workspace>/paper --engine xelatex --mode draft`

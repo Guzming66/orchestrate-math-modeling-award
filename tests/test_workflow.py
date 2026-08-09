@@ -24,6 +24,7 @@ from validate_competition_profile import validate_competition_profile
 from validate_innovation_portfolio import validate_innovation_portfolio
 from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
+from validate_paper_question_coverage import validate_paper_question_coverage
 from validate_review_findings import validate_review_findings
 from validate_task_board import validate_task_board
 
@@ -86,7 +87,9 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (sections / "03_question.tex").write_text(
-                "证据见 audits/results.json，artifact_path 与 sha256 已记录。\n",
+                "\\section{符号说明}\n"
+                "证据见 audits/results.json，artifact_path 与 sha256 已记录。\n"
+                "该方法具有较强的鲁棒性。\\begin{lstlisting}x = 1\\end{lstlisting}\n",
                 encoding="utf-8",
             )
             errors, warnings = scan_sources(paper, "submission")
@@ -95,6 +98,9 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(any("vague result quality" in item for item in warnings))
             self.assertTrue(any("contains a citation" in item for item in warnings))
             self.assertTrue(any("displayed mathematics" in item for item in warnings))
+            self.assertTrue(any("standalone notation section" in item for item in warnings))
+            self.assertTrue(any("tested boundary" in item for item in warnings))
+            self.assertTrue(any("full code listing" in item for item in warnings))
 
     def test_cumcm_initializer_uses_lean_question_level_latex_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -107,6 +113,35 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((root / "paper" / "sections" / "01_task_analysis.tex").is_file())
             appendix = (root / "paper" / "sections" / "90_appendix.tex").read_text(encoding="utf-8")
             self.assertNotIn("DRAFT CONTENT", appendix)
+
+    def test_cumcm_question_coverage_matches_frozen_model_questions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.initialize(root)
+            selection = {
+                "schema_version": 1,
+                "status": "frozen",
+                "questions": [{"question_id": "Q1"}, {"question_id": "Q2"}],
+            }
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps(selection, ensure_ascii=False), encoding="utf-8"
+            )
+            question_dir = root / "paper" / "sections" / "questions"
+            (question_dir / "q01.tex").write_text("\\section{问题一}\n直接答案。\n", encoding="utf-8")
+            (root / "paper" / "generated" / "question_sections.tex").write_text(
+                "\\input{sections/questions/q01.tex}\n", encoding="utf-8"
+            )
+            report = validate_paper_question_coverage(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("freezes 2" in item for item in report["errors"]))
+
+            (question_dir / "q02.tex").write_text("\\section{问题二}\n直接答案。\n", encoding="utf-8")
+            (root / "paper" / "generated" / "question_sections.tex").write_text(
+                "\\input{sections/questions/q01.tex}\n\\input{sections/questions/q02.tex}\n",
+                encoding="utf-8",
+            )
+            report = validate_paper_question_coverage(root)
+            self.assertEqual(report["status"], "pass")
 
     def complete_profile(self, root: Path, competition: str = "CUMCM") -> None:
         source = self.make_artifact(root, "audits/rules/official-rules.html")
