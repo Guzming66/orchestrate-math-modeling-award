@@ -39,7 +39,7 @@
 \par\noindent\textbf{关键词：}\PaperKeywords
 
 \clearpage
-\typeout{MATHAWARD:FRONT_MATTER_PAGES=\number\numexpr\value{page}-1\relax}
+\typeout{MATHMODEL:FRONT_MATTER_PAGES=\number\numexpr\value{page}-1\relax}
 \setcounter{mathawardbodystartpage}{\value{page}}
 
 \input{sections/01_problem_restatement.tex}
@@ -55,7 +55,7 @@
 
 \clearpage
 \setcounter{mathawardbodypages}{\numexpr\value{page}-\value{mathawardbodystartpage}\relax}
-\typeout{MATHAWARD:CUMCM_BODY_PAGES=\arabic{mathawardbodypages}}
+\typeout{MATHMODEL:BODY_PAGES=\arabic{mathawardbodypages}}
 
 \appendix
 \input{sections/90_appendix.tex}

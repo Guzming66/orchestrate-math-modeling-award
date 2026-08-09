@@ -1,4 +1,4 @@
 interface:
-  display_name: "数学建模大奖总控"
-  short_description: "创新主张验证、证据链、合规与直接 LaTeX 的建模总控"
-  default_prompt: "使用 $orchestrate-math-modeling-award 从强基线及其真实失败出发，寻找最小必要创新改变，经先例核验、证伪/消融、盲红队和论文证据链审计后，完成可提交的 LaTeX 论文。"
+  display_name: "数学建模竞赛总控"
+  short_description: "证据驱动的数学建模、科学审查、引用核验与 LaTeX 提交总控"
+  default_prompt: "使用 $orchestrate-math-modeling 按小题建立强基线和证据化模型选择，核验官方规则、创新主张、科学审查与 LaTeX 提交。"

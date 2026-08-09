@@ -1,147 +1,132 @@
 ---
-name: orchestrate-math-modeling-award
-description: "Orchestrate CUMCM/国赛 and MCM/ICM/美赛 with verified rules, an evidence-backed Innovation Claim Engine, reproducible modeling, direct-LaTeX writing, and fail-closed review. Use for contest decomposition, innovation/source/result audits, or final submission; not routine homework."
+name: orchestrate-math-modeling
+description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛. Use when a contest problem must be decomposed, modeled, validated, written directly in LaTeX, and audited against current official rules. Coordinates question-level model selection, innovation claims, sources, reproducibility, independent scientific review, and final submission. Does not predict or guarantee awards."
 ---
 
-# 数学建模大奖总控
+# 数学建模竞赛总控
 
-把本 Skill 作为主任务的裁判和总编。使用 `$mathmodel-skill` 管理一般比赛生命周期与状态；由本 Skill 管理官方来源、文献真实性、分支隔离、盲法验证、证据门禁、直接 LaTeX 和最终裁决。本 Skill 的门禁覆盖 `$mathmodel-skill` 中冲突的题号刻板路由与 Markdown/Pandoc 论文装配步骤。
+本 Skill 是裁决与集成层，不是“自动获奖器”。目标是让规则、模型选择、创新主张、科学结论和提交文件都有可追溯证据，并让最简单的充分方案可以胜出。
 
-## 按赛事加载资料
+## 五个核心系统
 
-识别赛事后再加载相应资料，不要一次读完全部 references。
+1. Competition Rule Engine：只执行当届官方来源支持的 Competition Profile v2。
+2. Model Selection Engine：按每个核心小题记录强基线、候选、拟合前理由、拟合后证据、最终选择和淘汰理由。
+3. Innovation Claim Engine：从已证明的基线失败出发，验证最小必要改变；模型数量和复杂度不产生创新信用。
+4. Scientific Review Engine：独立检查科学有效性、统计有效性和论文主张，统一写入 `audits/review_findings.json`。
+5. Submission Finalizer：只执行已经结构化的规则与验证状态，直编 LaTeX、核对哈希、匿名性和要求的提交产物。
 
-对于 CUMCM：
+历史赛题 benchmark 是离线评估工具，不参与赛中终审，也不输出获奖率。
 
-- Stage 0 完整读取 [competition-profile.md](references/competition-profile.md) 与 [cumcm-format-and-submission.md](references/cumcm-format-and-submission.md)，访问官方链接并生成当届 profile。
-- Stage 1 完整读取 [cumcm-problem-atlas.md](references/cumcm-problem-atlas.md)，按题面信号而不是 A/B/C/D/E 字母选择题型和分支。
-- Stage 8 完整读取 [cumcm-excellent-paper-benchmark.md](references/cumcm-excellent-paper-benchmark.md)、[citation-integrity-audit.md](references/citation-integrity-audit.md) 与 [latex-workflow.md](references/latex-workflow.md)。
-- Stage 9 再读格式规范、文献真实性审计、[evidence-gates.md](references/evidence-gates.md) 与 [final-submission-controls.md](references/final-submission-controls.md)，不得依赖 Stage 0 的记忆。
+## 分阶段推进
 
-对于 MCM/ICM，读取 [competition-profile.md](references/competition-profile.md)、[latex-workflow.md](references/latex-workflow.md)、[task-templates.md](references/task-templates.md) 和 [evidence-gates.md](references/evidence-gates.md)，并重新核对 COMAP 当届规则。
+工作区 `workflow_stage` 依次使用：
 
-凡准备把外部文献写入论文，在首次落稿前完整读取 [citation-integrity-audit.md](references/citation-integrity-audit.md)。
+`rule_verification → exploration → model_freeze → paper_freeze → submission`
 
-凡进入 Stage 2–3 的创新方案搜索、跨领域迁移或模型选型，完整读取 [innovation-engine.md](references/innovation-engine.md)。
+- 规则核验：允许题意解析和标明 `unverified` 的草探，不允许冻结正式结论。
+- 探索：先完成强基线，再只为真实 failure 增加候选或创新改动。
+- 模型冻结：每个核心小题的 `model_selection.json` 通过后才合并结果。
+- 论文冻结：LaTeX 正文、结果、引用和创新表达已经映射。
+- 提交：独立审查关闭后，才把 manifest 的阶段改为 `submission` 并运行 finalizer。
 
-## 坚持底线
+不要自动跨阶段。阶段改变是团队决策，记录到 `logs/decision_log.jsonl`。
 
-- 把当届官方网站视为规则唯一权威；缓存、往届论文、博客和本 Skill 都不能覆盖当届原文。
-- 不虚构数据、文献、实验、评委意见、评分或获奖概率。明确区分官方事实、公开样本观察、计算结果、假设和推测。
-- 搜索结果页、聚合摘要、AI 回答和二手转述只能用于发现线索，不能替代原始论文、官方报告、标准或数据文档。
-- 把优秀论文用作结构与证据链标杆，不复制其文字、图表、模型命名、代码或当届赛题解法。
-- 在分支冻结前保持独立。只共享原题、冻结后的共同数据、统一符号和输出契约，不共享其他分支结论。
-- 让人类队员确认建模选择、代码结果、引用、当届明确要求的声明和最终提交。任何 Skill 自评分都不是官方评审分数。
+## 启动工作区
 
-## 启动隔离工作区
-
-1. 识别赛事、年份、题号、截止时间、比赛阶段和现有文件。无法可靠判断时再询问用户。
+1. 确认赛事、届次、题号、截止时间、原题与附件。
 2. 运行：
 
-   `python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 1 --innovation-mode <fast|standard|championship>`
+   `python scripts/init_competition_workspace.py <workspace> --competition CUMCM --year 2026 --problem A --branches 1 --innovation-mode <standard|championship>`
 
-3. 运行 `python scripts/preflight.py <工作区> --competition <CUMCM|MCM|ICM>`；版本或 CLI 契约不兼容时先修复。Profile 未核验时可以做明确标注为 unverified 的题面结构与基线草探，但不得启动证据晋级、论文主张或最终模型裁决。
-4. 将原题和原始附件放入 `inputs/original/`，保留原件和哈希，不覆盖、不重命名原件。
-5. 在 `shared/problem_contract.md` 冻结目标、约束、数据字典、评价指标、子问依赖、允许的外部数据和交付要求。
-6. 在 `shared/problem_route.md` 记录强基线；只有确有验证价值时才增加模型分支，分支数量不是创新指标。
-7. 调用 `$mathmodel-skill` 建立比赛阶段与决策日志，但使用本 Skill 的题面信号路由和 LaTeX 门禁。
-8. 完成并验证 `compliance/competition_profile.json`；不得用年份推断规则。
+3. 运行 `python scripts/preflight.py <workspace>`。
+4. 原题与原始附件放入 `inputs/original/`，保留原文件和哈希。
+5. 冻结 `shared/problem_contract.md`：逐小题写目标、输入、输出、约束、评价标准、依赖和统一接口。
+6. 当已有 v8 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移会保留旧文件，但重置规则与审查信任。
 
-## 按题面信号路由国赛题目
+`standard` 是默认模式；`championship` 只提高独立审查和稳健性要求，不强迫增加模型、Agent 或计算量。
 
-不要把 A 固定为连续、B 固定为评价、C 固定为数据。近年官方题目跨越机理动力学、逆问题、统计判别、组合优化、图网络、视频姿态和风险决策，题号只表示题号。
+## Competition Profile v2
 
-先建立题面特征卡：
+进入规则核验时完整读取 [competition-profile.md](references/competition-profile.md)。
 
-- 输入模态与规模：表格、时序、空间、图、图像/视频、文本或无数据；
-- 输出任务：估计、预测、分类、评价、优化、仿真、控制、路径或机制解释；
-- 约束结构：连续/离散、确定/随机、静态/动态、单/多目标、是否强物理约束；
-- 可验证证据：守恒、已知解、留出数据、小规模精确解、替代求解器、现场常识或专家边界；
-- 风险：不可识别、数据泄漏、量纲错误、求解超时、外推和上游误差传播。
+- 每个可执行 requirement 必须通过 `rule_bindings` 指向 `source_id + locator + evidence_sha256`。
+- 官方网页或 PDF 的本地快照、哈希、核验方法和时间必须存在。
+- `build` 决定 LaTeX 引擎与主文件；finalizer 不根据赛事名或年份猜测。
+- AI 声明、详情文件、支撑包、页数、纸张和文件名都只从 verified profile 执行。
+- 官方来源变化、哈希失配或 profile 未核验时停止冻结与提交。
 
-先建立一个强基线。只有当替代模型能检验关键假设、解释矛盾或降低失败风险时才增加分支；不要为数量只替换优化器或调参。
+## 按小题选模型
 
-## 运行 Innovation Claim Engine
+对每个核心小题填写 `synthesis/model_selection.json`：
 
-完成题面结构图后、正式建模前，完整执行 [innovation-engine.md](references/innovation-engine.md)：
+1. 写清 `problem_structure`，包括目标、数据、约束和验证锚点。
+2. 先建立 `strong_baseline_id`；候选数量不设硬指标。
+3. 在拟合前写 `pre_fit_rationale`，防止看完结果再编理由。
+4. 用真实 artifact 记录指标、诊断和稳健性；基线与入选方案都必须有证据。
+5. 写明 `selected_model_id`、`selection_rationale`、复杂度代价和每个未选模型的淘汰理由。
+6. 运行 `python scripts/validate_model_selection.py <workspace>`。
 
-1. 建立题面结构图和最简单的强基线。
-2. 用 artifact-backed 测试证明基线在哪里、为什么失败；没有材料性失败时不制造创新。
-3. 从多个 innovation axis 寻找针对 failure 的最小充分改变；类比和多 scout 只是探索工具，数量不足只告警。
-4. 使用 `$citation-management` 核对最近先例，以 falsification、创新开/关 ablation 和稳健性证明改变有效。
-5. fusion/ensemble/hybrid 只有在组件对应不同 failure、接口明确且逐组件消融通过时才可能成为创新。
-6. Critic 先硬否决，Jury 再按 problem fit、evidence、necessity、novelty、robustness、parsimony、communication 排序；允许一个简单主方案胜出。
-7. 运行 `validate_innovation_portfolio.py`；写论文后再运行 `validate_paper_innovation.py`。两者都通过才允许宣称创新链完整。
+不得用无依据的加权总分、TOPSIS 或“最高单项精度”替代结构判断。若复杂模型没有解决新的 failure，选择强基线。
 
-不要硬编码订阅价格或固定模型名；高计算模式只用于结构裁决、强红队和 Jury，并以同题评测决定价值。
+## 验证创新主张
 
-## 使用隔离科学环境
+进入探索阶段时完整读取 [innovation-engine.md](references/innovation-engine.md)。核心链条是：
 
-运行统计、量纲、不确定性或文献脚本时，优先使用当前比赛工作区的独立 `.venv`；如果不存在就先创建。不要向基础 Anaconda 或系统 Python 环境追加依赖。仅在题目确实需要时安装额外包，并记录解释器路径、Python 版本、包版本与理由。
+`Problem Structure → Strong Baseline → Baseline Failure → Minimal Change → Evidence → Nearest Precedent → Paper Claim`
 
-## 将 LaTeX 设为唯一论文真源
+- Innovation axis 可以是问题表述、变量表示、机制、分解、目标/约束、推断、求解、数据、验证、决策解释或模型结构。
+- fusion/ensemble/hybrid 本身没有创新信用；只有组件针对不同 failure、数学接口明确且逐组件消融通过时才可能成立。
+- 候选数、scout 数、跨领域类比和探索宽度只产生 warning。
+- 没有材料性基线失败时，可以不提出创新 claim；不得制造“创新”。
+- 运行 `validate_innovation_portfolio.py`，写入论文后再运行 `validate_paper_innovation.py`。
 
-完整读取 [latex-workflow.md](references/latex-workflow.md)：
+## 独立科学审查
 
-- 国赛使用 XeLaTeX，美赛使用 pdfLaTeX；通过 `latexmk` 直接编译 `paper/main.tex`。
-- 不把 Markdown、Word、HTML 或 Notebook 导出物转换成最终论文，不调用 Pandoc 或 `render_paper.py` 组装正文。
-- 只允许论文总编修改 `paper/main.tex`、`paper/generated/metadata.tex` 和 `paper/references.bib`；其他写作任务各自拥有一个 `.tex` 章节。
-- 把程序生成的数值宏和表格写入 `paper/generated/*.tex`，图片写入 `paper/figures/`；正文只引用，不手抄结果。
-- 每次有意义的修改后运行 `python scripts/build_latex.py <工作区>/paper --competition <CUMCM|MCM|ICM> --mode draft`。
-- 草稿阶段继续使用 `build_latex.py`；最终只运行 `python scripts/finalize_submission.py <工作区>`。它统一执行全部门禁、提交模式构建、匿名扫描和支撑包生成。
-- 调用本 Skill 或 Codex 即属于使用 AI 工具。声明位置、详情 PDF 和支撑材料要求只从已核验 competition profile 执行；任何赛事都不得选择“未使用 AI”或隐瞒实际使用。
+在论文冻结前调用 `$scientific-critical-thinking`、`$statistical-analysis` 和 `$uncertainty-and-units`，分别检查：
 
-## 拆分独立任务
+- scientific：问题表述、假设、机制、边界、因果解释和外推范围；
+- statistical：数据泄漏、抽样、估计、区间、诊断、比较公平性和不确定性；
+- claims：摘要、正文、图表和结论是否超出结果与文献证据。
 
-当用户要求拆题、并行任务或交叉验证时，完整读取 [task-templates.md](references/task-templates.md)，先填写 `shared/task_board.csv` 的依赖、负责人、截止/冻结时间、后备方案、交付物和证据，再委派彼此独立且边界明确的任务。运行 `python scripts/validate_task_board.py <工作区>` 检查未知依赖、环和越序完成；并行写同一文件时停止并重新分配所有权。
+统一写入 `audits/review_findings.json`，严重度仅用 `critical / major / minor / suggestion`。critical 和 major 必须有 `artifact_path + sha256 + command_or_check + checked_at`；未关闭 critical 阻断，open major 数不得超过工作区 policy。运行 `validate_review_findings.py`。
 
-要求每个实际创建的建模分支至少交付：题意解释与假设；数学定义、目标与约束；强基线；可运行代码、环境和随机种子；结果生成路径；适配风险的验证与稳健性证据；失败边界；一页内分支摘要。
+## 来源、结果与复现
 
-不要向独立分支泄露预期答案、其他分支结果、优秀论文的具体解法或主任务偏好。
+- 添加或修改文献时必须调用 `$citation-management`，完整执行 [citation-integrity-audit.md](references/citation-integrity-audit.md)。搜索摘要只用于发现，不代替原文。
+- `audits/data/data_provenance.csv` 覆盖所有原始与外部输入。
+- `synthesis/result_manifest.csv` 覆盖摘要、结论和关键图表中的核心数字，并追踪到输入、命令、环境、单位、随机种子和文件哈希。
+- `audits/reproduction/reproduction_status.json` 记录干净重跑命令、独立复核人和证据。
+- 不虚构数据、文献、实验、评委意见、评分或获奖概率；明确区分官方事实、计算结果、假设和推测。
 
-## 执行证据门禁
+## LaTeX 唯一真源
 
-裁决前完整读取 [evidence-gates.md](references/evidence-gates.md)，把每道门禁的复核人、时间、证据和未关闭问题写入 `audits/gate_status.json`，再依次执行：
+写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)。
 
-1. 规则与提交合规；
-2. 文献来源、元数据真实性与论点支持；
-3. 数据质量；
-4. 分支模型完整性；
-5. 统计、量纲与不确定性；
-6. 独立验证；有必要时才增加异质模型或替代求解器；
-7. 独立复现；
-8. 论文、LaTeX、附件和提交。
+- 最终论文只维护 `paper/main.tex`、分章节 `.tex`、`paper/generated/*.tex`、`paper/figures/` 和 `paper/references.bib`。
+- 不经 Word、Markdown、HTML、Notebook、Pandoc 或其他格式转换生成最终正文。
+- 草稿构建使用 profile 中的 engine：
 
-新增或修改文献时必须调用 `$citation-management`；其他环节需要时调用 `data-analytics:analyze-data-quality`、`$statistical-analysis`、`$uncertainty-and-units` 与 `$scientific-critical-thinking`。把发现标为 `blocking`、`major` 或 `minor`，保存到对应 `audits/` 目录。
+  `python scripts/build_latex.py <workspace>/paper --engine xelatex --mode draft`
 
-## 交叉验证与裁决
+- 程序生成数字与表格，正文只引用，禁止手抄关键结果。
 
-冻结分支后再交换结果。在 `synthesis/evidence_matrix.csv` 比较题目贴合度、假设风险、数据支持、相对基线收益、诊断、稳健性、复现性、可解释性、实现风险、论文可表达性和合规风险。
+## 总控任务与配套 Skills
 
-不以多数投票替代证据，不平均不兼容模型。定位矛盾来自数据版本、假设、目标函数、随机性、实现或适用范围。优先选择通过全部阻断门禁、证据链短且可复现的方案；复杂模型只有在稳定、可解释且带来实质收益时胜出。
+使用 `$mathmodel-skill` 管理十阶段比赛生命周期和决策日志；本 Skill 覆盖其中冲突的规则执行、模型选择、证据审计和 LaTeX 终审。
 
-## 合并论文与交付
+- `$citation-management`：文献身份、元数据、原文支持与 BibTeX。
+- `$statistical-analysis`：统计设计、诊断、效应与区间。
+- `$uncertainty-and-units`：单位、量纲、误差传播与量级检查。
+- `$scientific-critical-thinking`：独立科学审查与主张边界。
 
-- 只从通过门禁的产物写正文，追踪每个核心数字到输入、代码版本和生成步骤。
-- 把每个原始/外部输入登记到 `data_provenance.csv`，把每个摘要或结论中的核心数字登记到 `result_manifest.csv`；文件哈希不匹配时不得合并。
-- 摘要逐问写“方法 + 可追溯结果 + 验证/边界”，但不机械模仿展示论文段落。
-- 统一符号、单位、有效数字、图例和表格口径；明确假设、验证、敏感性、优缺点与适用边界。
-- 只合并 `audits/citations/citation_ledger.csv` 中身份、元数据和论点支持均已通过的引用；核心主张保留页码、章节、公式、表格或图号等原文定位。
-- 当 verified competition profile 要求时，论文附录列出支撑材料文件并包含完整可运行源程序；支撑压缩包再包含同一版本代码、外部数据和必要中间结果。
-- 按当届官方规则完成明确要求的声明或额外材料。
+拆成小题任务或独立验证任务时完整读取 [task-templates.md](references/task-templates.md)。每个任务只写自己的目录；共享符号、数据版本和接口由总控冻结。不要把预期答案、其他分支结论或优秀论文具体解法泄露给独立验证任务。
 
 ## 统一终审
 
-完整读取 [final-submission-controls.md](references/final-submission-controls.md)。最终只运行：
+提交前完整读取 [final-submission-controls.md](references/final-submission-controls.md)，将 `workflow_stage` 明确改为 `submission`，然后只运行：
 
-`python scripts/finalize_submission.py <工作区>`
+`python scripts/finalize_submission.py <workspace>`
 
-该命令必须重新快照环境、校验任务依赖、核对官方来源、文献台账、输入与结果哈希、复现状态、证据矩阵和八道门禁，直接编译 LaTeX，并在 profile 要求时从显式清单生成支撑 ZIP、扫描身份/凭据并输出论文与压缩包哈希。只有 `audits/submission/final_report.json` 为 `pass` 时才允许报告“可提交”。
+硬阻断仅限会使结论、复现、合规或提交失效的问题：未核验规则、缺少 provenance、核心结果不可复现、模型选择无理由、创新或论文强主张无证据、未关闭 critical/超阈值 major、哈希失配、profile 要求的产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
 
-## 使用 Ponytail 的边界
-
-不要在模型选择、验证设计、稳健性或论文证据链阶段调用 Ponytail。仅在方案通过复现后用它清理重复代码或不必要依赖；不得删除基线、诊断、日志、随机种子或审计步骤。
-
-## 停止条件
-
-出现以下任一情况时不得宣称可提交：competition profile 未核验或 source artifact/hash 失配；Innovation Claim Engine 或论文创新审计未通过；创新最近先例未核实；入围 claim 没有 baseline failure、最小改变、证伪/消融或论文落点；任务依赖未关闭；输入、结果或 gate evidence 未登记或哈希不符；核心结果无法独立复现；统计/单位/分支冲突未解释；引用身份或原文支持不成立；匿名、支撑包、LaTeX、逐页检查或最终报告未通过。
+只有 `audits/submission/final_report.json` 为 `pass` 才能报告“技术上可提交”。这不等同于赛事合规的最终法律判断，也不保证任何奖项；由队员复核并完成正式上传。

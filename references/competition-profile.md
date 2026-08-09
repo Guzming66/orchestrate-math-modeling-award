@@ -1,29 +1,38 @@
-# Versioned competition profile
+# Competition Profile v2
 
-## 原则
+## 目的
 
-不得用 `year >= N` 推断规则。每个比赛工作区维护 `compliance/competition_profile.json`，只执行经当届官方来源快照核验的 profile。初始化文件默认 `unverified`；Stage 0、8、9 重新核验，官方通知变化时创建新 `profile_id`，不静默覆盖旧版本。
+`compliance/competition_profile.json` 是 finalizer 唯一执行的赛事规则输入。不得用赛事名、题号或 `year >= N` 推断格式与提交要求。初始化和 v8 迁移后的 profile 都是 `unverified`。
 
-## Profile 结构
+## 三层结构
 
-字段契约见 `schemas/competition-profile.schema.json`；运行时 validator 只依赖 Python 标准库，并执行相同的关键约束。
+1. `sources`：每个官方来源保存稳定 `source_id`、官方 URL、本地快照、SHA-256、核验方法和时间。
+2. `requirements`：只写可执行的论文、提交、AI 与额外产物要求。
+3. `rule_bindings`：把每个非空、会被执行的 requirement 绑定到 `source_id + locator + evidence_sha256`。
 
-- 身份：`schema_version`、`profile_id`、`competition`、`edition`；
-- 生效与核验：`effective_from`、`effective_to`、`status`、`verified_at`、`verified_by`；
-- 官方来源：每项保存 `kind`、`url`、`artifact_path`、`sha256`、`command_or_check`、`checked_at`；
-- `requirements.paper`：PDF、首页/总页数/正文页数、文件大小、纸张、目录和匿名；
-- `requirements.submission`：支撑包是否需要及大小；
-- `requirements.ai`：政策是否核验、独立使用声明及位置、正文逐处披露、AI 工具引用、人工核验、详情 PDF 和官方文件名。不同赛事/届次要求不同；不得把“详情 PDF”误推成“必须有独立声明”，也不得反过来遗漏正文标注。
+`locator` 必须能让另一名队员在快照中找到原条款，例如 PDF 页码/章节、网页标题/段落或表格行。URL、搜索摘要、往届规则、博客和模型回答不能替代官方快照。
 
-规则网页或 PDF 快照放在 `audits/rules/`。`artifact_path` 必须指向工作区内实际文件，哈希必须匹配。URL、标题或“已核验”文字不能代替快照证据。
+## Build 与 requirements 的边界
 
-## 工作流
+`build.latex_engine` 和 `build.main_document` 是本地执行配置，不是赛事知识。Finalizer 从这里取得编译方式，不按 `competition` 分支。
 
-1. 打开当届官方入口；保存页面/PDF 快照及取得时间。
-2. 逐条提取可执行要求，不从往届 profile 复制未知项。
-3. 由第二人核对来源身份、版本、生效时间和具体条款。
-4. 填写 profile，设置唯一 `profile_id` 和 `status=verified`。
-5. 运行 `python <skill>/scripts/validate_competition_profile.py <workspace>`。
-6. 官方页面更新或 source hash 改变时，profile 立即失效并重新核验。
+`requirements` 包含：
 
-当前权威入口示例仅用于发现：CUMCM 使用组委会官网 `mcm.edu.cn`；MCM/ICM 使用 COMAP `contest.comap.com` 当届 instructions。最终以比赛当时官方页面为准。
+- `paper`：格式、页数、大小、纸张、目录和匿名；
+- `submission`：支撑包要求及大小；
+- `ai`：政策是否已检查、声明源文件及启用 marker、声明位置、逐处披露、工具引用、人工验证、详情源文件和官方文件名；
+- `artifacts`：官方要求的额外产物及工作区路径、归档路径。
+
+不适用的条款写 `null`，不要猜 `false`。所有非 `null` 可执行值都需要 binding；AI 的 `policy_checked=true` 也需要 binding。
+
+## 核验步骤
+
+1. 打开当届官方入口，保存页面/PDF 快照到 `audits/rules/`。
+2. 记录 source artifact 的 SHA-256、核验方式和取得时间。
+3. 逐条提取 requirement，并为每条添加准确 locator。
+4. 第二名队员复核来源身份、版本、生效时间、条款解释和哈希。
+5. 设置唯一 `profile_id`、`status=verified`、复核人和时间。
+6. 运行 `python scripts/validate_competition_profile.py <workspace>`。
+7. 官方页面更新、源 hash 改变或解释有争议时，将 profile 退回 `unverified` 并重做。
+
+Schema 位于 `schemas/competition-profile.schema.json`。当前官方入口只可用于发现线索；最终规则必须在比赛当时重新核验。

@@ -93,10 +93,14 @@ def preflight(workspace: Path | None = None, competition: str = "") -> dict[str,
     commands = config.get("commands")
     command_names: list[str] = []
     if isinstance(commands, dict):
-        for key in ("all", competition):
-            values = commands.get(key)
-            if isinstance(values, list):
-                command_names.extend(str(item) for item in values)
+        values = commands.get("all")
+        if isinstance(values, list):
+            command_names.extend(str(item) for item in values)
+    if workspace is not None:
+        profile = load_json(workspace.resolve() / "compliance" / "competition_profile.json")
+        build = profile.get("build")
+        if isinstance(build, dict) and str(build.get("latex_engine", "")).strip():
+            command_names.append(str(build["latex_engine"]))
     for name in sorted(set(command_names)):
         found = shutil.which(name)
         checks[f"command:{name}"] = found

@@ -1,79 +1,47 @@
-# 数学建模大奖总控 Skill
+# 数学建模竞赛总控 Skill
 
-面向全国大学生数学建模竞赛（CUMCM）和 MCM/ICM 的 Codex 总控 Skill。它负责寻找并验证论文创新主张、核验当届官方规则、拆解多小问题、审计数据/文献/结果来源、组织必要的模型分支与交叉验证，并以 LaTeX 为论文唯一真源完成提交前门禁。
+`orchestrate-math-modeling` 是面向 CUMCM/国赛和 MCM/ICM/美赛的证据驱动总控框架。它不承诺奖项，重点是让团队能够说明：为什么选这个模型、创新在哪里、结论凭什么成立、论文与提交规则是否真正通过。
 
-## 核心能力
+## v9 的五个核心系统
 
-- 按依赖关系拆分赛题、小题和模型分支，避免不同任务互相污染。
-- Innovation Claim Engine 从强基线的真实失败出发，寻找最小必要改变，并执行最近先例核验、改变开/关消融、便宜证伪、盲红队和论文表达审计。
-- 候选数量、scout 数、跨领域类比和 safe/stretch 只作探索提醒；一个简单模型中的一个强创新主张也能通过。
-- 模型融合本身不获得创新分，除非组件针对不同失败机制、接口明确且消融证明不可替代。
-- 用统一台账管理官方规则、原始数据、关键结论、引用和结果哈希。
-- 对真正有必要的候选方案执行独立建模、盲交叉验证、统计与不确定性审核。
-- 直接维护 CUMCM 与 MCM/ICM LaTeX 工程，不经过 Word 格式转换。
-- 最终检查采用“失败即阻断”：复现、匿名性、引用、数据来源、论文编译或支撑材料任一不合格，都不会报告“可提交”。
+- Competition Rule Engine：Profile v2 把每个硬规则绑定到当届官方来源、原文定位和本地快照哈希。
+- Model Selection Engine：按小题记录强基线、候选、拟合前理由、拟合后证据、最终选择和淘汰理由；简单模型可以胜出。
+- Innovation Claim Engine：只为已证明的 baseline failure 提出最小必要改变，并用先例、证伪、消融和论文落点支持。
+- Scientific Review Engine：统一进行科学、统计和主张审查，critical/major 必须有真实证据产物。
+- Submission Finalizer：不猜赛事规则，只执行 verified profile、验证状态、文件与哈希，直接构建 LaTeX。
+
+工作流采用五个阶段：`rule_verification → exploration → model_freeze → paper_freeze → submission`。默认使用 `standard`；`championship` 加强独立审查与稳健性，但不强制增加模型或计算量。
 
 ## 配套 Skills
 
-使用前请安装以下 Skills：
+必需：`mathmodel-skill`、`citation-management`。
 
-- 必需：`mathmodel-skill`、`citation-management`
-- 强烈建议：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`
-- 按需：`data-analytics:analyze-data-quality`
+强烈建议：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`。
 
-其中 `mathmodel-skill` 提供十阶段基础流程，本 Skill 负责总控、证据链和提交门禁。引用验证脚本默认从同级目录、`$CODEX_HOME/skills`、`~/.codex/skills` 或 `~/.agents/skills` 寻找；也可通过 `CITATION_VALIDATOR` 指定。
-
-## 安装与调用
-
-仓库地址：<https://github.com/Guzming66/orchestrate-math-modeling-award>
-
-在 Codex 中使用 `$skill-installer` 从上述 GitHub 仓库安装，然后明确调用：
-
-```text
-使用 $orchestrate-math-modeling-award 初始化这道国赛题，启用 championship Innovation Claim Engine；先核验当届官方规则并生成带快照与哈希的 competition profile，再按小题建立任务板；从强基线和基线失败开始，论文只使用 LaTeX。
-```
-
-也可以手动把整个仓库复制到 Codex 的 Skills 目录，保持 `SKILL.md`、`scripts/`、`references/`、`assets/` 和 `agents/` 的相对位置不变。
-
-## 本地依赖
-
-- Python 3.10 或更高版本；运行时脚本只依赖标准库。
-- 完整 LaTeX 工具链：`latexmk`、`xelatex`、`pdflatex`、`bibtex`。
-- PDF 检查工具：Poppler 的 `pdfinfo` 和 `pdftoppm`。
-- Pillow 为可选依赖，用于支撑材料中的图片元数据扫描。
-
-建议每场比赛在独立工作区和独立 `.venv` 中运行，并保存解释器、包版本、随机种子和环境快照。
+这六个 Skill 可以覆盖完整建模与论文流程，但仍需要参赛队员做题意判断、核实当届官方规则、检查代码和数据、审阅引用、确认 AI 披露并完成正式提交。
 
 ## 快速开始
 
-```powershell
-python scripts/init_competition_workspace.py <工作区> --competition CUMCM --year 2026 --problem A --branches 1 --innovation-mode championship
-python scripts/preflight.py <工作区> --competition CUMCM
-python scripts/validate_competition_profile.py <工作区>
-python scripts/validate_innovation_portfolio.py <工作区>
-python scripts/validate_paper_innovation.py <工作区>
-python scripts/build_latex.py <工作区>/paper --competition CUMCM --mode draft
-python scripts/finalize_submission.py <工作区>
+```text
+使用 $orchestrate-math-modeling 为这道国赛题建立总控工作区。先冻结三个小题的统一问题契约，再核验当届官方规则并生成带 source locator 和 hash 的 Competition Profile v2。每个小题先做强基线，只在真实失败证据支持时增加候选或创新改动；模型冻结后进行独立科学、统计和主张审查。论文只使用 LaTeX。
 ```
 
-最后一条命令只有在全部硬门禁通过后才会生成可提交清单。
-旧版 v7 工作区先运行 `python scripts/migrate_workspace.py <工作区>`；迁移会保留旧路线文件，但规则、门禁、复现和创新证据必须按 v8 artifact 规范重新核验。
+安装后 Skill 的详细执行规则见 `SKILL.md`。Skill 标识已经改为 `orchestrate-math-modeling`；GitHub 仓库在完成远端改名前仍使用原地址：<https://github.com/Guzming66/orchestrate-math-modeling-award>
 
-## 验证
+## 证据等级
 
-```powershell
-python -m unittest discover -s tests -v
-```
+- E0：实现通过本仓库自动化测试。当前覆盖 Profile v2 溯源、模型选择、创新最小性、科学审查、AI profile 驱动、迁移、溯源、匿名打包和 fail-closed 终审。
+- E1：在公开历史题上完成可复现的结构化演练。
+- E2：由不知道版本信息的独立评阅者比较论文质量。
+- E3：多届真实赛事外部结果；仅作观察，不能把获奖归因于本 Skill。
 
-CI 覆盖单一简单创新主张、融合消融、规则/证据哈希、论文主张映射、v7→v8 迁移、打包与失败关闭。
+当前公开结论只到 E0。仓库中的 benchmark 是离线质量评估工具，不输出获奖率，也不参与赛中终审。
 
-## 重要说明
+## 设计底线
 
-- 仓库不包含任何赛题原文、参赛论文、队员身份信息或比赛数据。
-- 每届官方通知、格式规范和提交规则始终高于仓库内的历史参考资料；开赛后必须重新联网核验并保存来源。
-- 本项目不是 CUMCM、COMAP 或 OpenAI 的官方项目，也不保证奖项结果。
-- 两个 LaTeX 模板包含基于 `mathmodel-skill` 的 MIT 许可衍生部分，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
-## 许可证
-
-MIT，见 [LICENSE](LICENSE)。
+- 创新不是模型数量或算法复杂度。
+- 融合模型本身没有创新信用。
+- 搜索宽度只告警，不阻断。
+- 规则、文献、数据、结果和 critical/major finding 必须有 artifact-backed evidence。
+- 最终论文以 LaTeX 为唯一真源，不做 Word/Markdown 格式转换。
+- `final_report.json=pass` 只表示本框架定义的技术门禁通过，不代表官方接受或获奖保证。

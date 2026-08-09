@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/orchestrate-math-modeling/review-findings-v1.schema.json",
+  "title": "Independent scientific review findings",
+  "type": "object",
+  "required": ["schema_version", "status", "policy", "coverage", "findings"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["not_reviewed", "reviewed"]},
+    "policy": {"type": "object"},
+    "coverage": {"type": "array"},
+    "findings": {"type": "array"}
+  }
+}

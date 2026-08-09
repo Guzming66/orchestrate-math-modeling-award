@@ -12,7 +12,6 @@ from evidence_utils import artifact_errors
 
 
 EXPLORATION_TARGETS = {
-    "fast": (3, 2, 2, 0),
     "standard": (6, 4, 3, 1),
     "championship": (8, 5, 4, 1),
 }
@@ -147,7 +146,7 @@ def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
 
     promoted = [row for row in selection if row.get("decision", "").strip().lower() == "promote"]
     if not promoted:
-        errors.append("selection must promote at least one evidence-backed innovation claim")
+        warnings.append("no innovation claim was promoted; the paper must not make an innovation claim")
     promoted_ids: set[str] = set()
     primary_ids: set[str] = set()
     for index, row in enumerate(promoted, start=2):

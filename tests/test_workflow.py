@@ -15,13 +15,15 @@ SKILL = Path(__file__).resolve().parents[1]
 SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from finalize_submission import check_cumcm_ai_compliance, check_data_provenance, finalize
+from finalize_submission import check_ai_compliance, check_data_provenance, finalize
 from migrate_workspace import migrate
 from package_submission import package_workspace
 from score_claim_benchmark import score
 from validate_competition_profile import validate_competition_profile
 from validate_innovation_portfolio import validate_innovation_portfolio
+from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
+from validate_review_findings import validate_review_findings
 from validate_task_board import validate_task_board
 
 
@@ -76,8 +78,8 @@ class WorkflowTests(unittest.TestCase):
     def complete_profile(self, root: Path, competition: str = "CUMCM") -> None:
         source = self.make_artifact(root, "audits/rules/official-rules.html")
         profile = {
-            "schema_version": 1,
-            "profile_id": f"{competition}-2026-fixture-v1",
+            "schema_version": 2,
+            "profile_id": f"{competition}-2026-fixture-v2",
             "competition": competition,
             "edition": "2026",
             "status": "verified",
@@ -87,11 +89,16 @@ class WorkflowTests(unittest.TestCase):
             "verified_by": "independent-rule-auditor",
             "sources": [
                 {
+                    "source_id": "official-rules",
                     "kind": "official rules",
                     "url": "https://example.invalid/official-rules",
                     **source,
                 }
             ],
+            "build": {
+                "latex_engine": "xelatex" if competition == "CUMCM" else "pdflatex",
+                "main_document": "main.tex",
+            },
             "requirements": {
                 "paper": {
                     "format": "pdf",
@@ -111,14 +118,30 @@ class WorkflowTests(unittest.TestCase):
                     "policy_checked": True,
                     "usage_statement_required": False,
                     "details_pdf_required": competition == "CUMCM",
+                    "statement_source": None,
+                    "statement_enable_marker": None,
                     "statement_position": None,
                     "inline_disclosure_required": competition == "CUMCM",
                     "tool_reference_required": competition == "CUMCM",
                     "human_verification_required": competition == "CUMCM",
+                    "details_source": "paper/ai_usage_details.tex" if competition == "CUMCM" else None,
                     "details_filename": "AI工具使用详情.pdf" if competition == "CUMCM" else None,
                 },
+                "artifacts": [],
             },
+            "rule_bindings": [],
         }
+        for group in ("paper", "submission", "ai"):
+            for field, value in profile["requirements"][group].items():
+                if value is not None:
+                    profile["rule_bindings"].append(
+                        {
+                            "requirement_pointer": f"/requirements/{group}/{field}",
+                            "source_id": "official-rules",
+                            "locator": f"fixture section for {group}.{field}",
+                            "evidence_sha256": source["sha256"],
+                        }
+                    )
         (root / "compliance" / "competition_profile.json").write_text(
             json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
@@ -275,11 +298,13 @@ class WorkflowTests(unittest.TestCase):
                 "innovation/claim_portfolio.csv",
                 "innovation/claim_experiments.csv",
                 "synthesis/innovation_claims.csv",
-                "audits/gate_status.json",
+                "synthesis/model_selection.json",
+                "audits/review_findings.json",
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 8)
+            self.assertEqual(manifest["workflow_version"], 9)
+            self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["branches"], ["model-a"])
 
     def test_initializer_refuses_to_partially_upgrade_old_workspace(self) -> None:
@@ -326,6 +351,16 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(report["status"], "pass", report["errors"])
             self.assertEqual(report["promoted_claims"], ["C1"])
             self.assertTrue(any("search breadth" in item for item in report["warnings"]))
+
+    def test_no_innovation_claim_is_allowed_without_innovation_wording(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            portfolio = validate_innovation_portfolio(root)
+            paper = validate_paper_innovation(root)
+            self.assertEqual(portfolio["status"], "pass", portfolio["errors"])
+            self.assertEqual(paper["status"], "pass", paper["errors"])
+            self.assertTrue(any("no innovation claim" in item for item in portfolio["warnings"]))
 
     def test_claim_without_baseline_failure_evidence_is_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -433,36 +468,121 @@ class WorkflowTests(unittest.TestCase):
     def test_migration_preserves_legacy_but_resets_evidence_trust(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            for relative in ("innovation", "compliance", "synthesis", "shared", "audits/citations", "audits/data", "audits/reproduction"):
+            for relative in ("innovation", "compliance", "synthesis", "shared", "audits"):
                 (root / relative).mkdir(parents=True, exist_ok=True)
             (root / "competition_manifest.json").write_text(
-                json.dumps({"workflow_version": 7, "competition": "CUMCM", "year": 2026, "branches": ["model-a"]}),
+                json.dumps(
+                    {
+                        "workflow_version": 8,
+                        "competition": "CUMCM",
+                        "year": 2026,
+                        "branches": ["model-a"],
+                        "innovation_mode": "fast",
+                        "paper_engine": "xelatex",
+                        "paper_source": "paper/main.tex",
+                    }
+                ),
                 encoding="utf-8",
             )
-            with (root / "innovation" / "candidate_portfolio.csv").open("w", encoding="utf-8", newline="") as handle:
-                writer = csv.DictWriter(handle, fieldnames=["candidate_id", "scout_id", "origin_lens", "problem_structure", "baseline", "mechanism_change", "status"])
-                writer.writeheader()
-                writer.writerow({"candidate_id": "OLD1", "scout_id": "S1", "origin_lens": "mechanism", "problem_structure": "network", "baseline": "shortest path", "mechanism_change": "capacity", "status": "survivor"})
-            for filename in ("novelty_audit.csv", "critic_findings.csv", "selection.csv"):
-                (root / "innovation" / filename).write_text("candidate_id,status\nOLD1,pass\n", encoding="utf-8")
-            (root / "audits" / "citations" / "citation_ledger.csv").write_text("citation_key,status\nK1,verified\n", encoding="utf-8")
-            (root / "audits" / "data" / "data_provenance.csv").write_text("data_id,status\nD1,verified\n", encoding="utf-8")
-            (root / "audits" / "gate_status.json").write_text(json.dumps({"status": "pass", "gates": {}}), encoding="utf-8")
-            (root / "audits" / "reproduction" / "reproduction_status.json").write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+            (root / "compliance" / "competition_profile.json").write_text(
+                json.dumps({"schema_version": 1, "status": "verified", "requirements": {"paper": {"max_body_pages": 30}}}),
+                encoding="utf-8",
+            )
+            (root / "synthesis" / "evidence_matrix.csv").write_text("branch,decision\nmodel-a,selected\n", encoding="utf-8")
             (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
 
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 8)
-            with (root / "innovation" / "claim_portfolio.csv").open(encoding="utf-8-sig") as handle:
-                claims = list(csv.DictReader(handle))
-            self.assertEqual(claims[0]["claim_id"], "OLD1")
-            self.assertEqual(claims[0]["baseline_failure"], "")
-            self.assertTrue((root / "innovation" / "legacy_v7" / "selection.csv").is_file())
-            self.assertTrue((root / "audits" / "gate_status_v7.json").is_file())
-            gates = json.loads((root / "audits" / "gate_status.json").read_text(encoding="utf-8"))
-            self.assertEqual(gates["status"], "not_reviewed")
+            self.assertEqual(manifest["workflow_version"], 9)
+            self.assertEqual(manifest["workflow_stage"], "rule_verification")
+            self.assertEqual(manifest["innovation_mode"], "standard")
+            profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["schema_version"], 2)
+            self.assertEqual(profile["status"], "unverified")
+            self.assertEqual(profile["rule_bindings"], [])
+            self.assertTrue((root / "compliance" / "competition_profile_v8.json").is_file())
+            self.assertTrue((root / "shared" / "task_board_v8.csv").is_file())
+            self.assertTrue((root / "synthesis" / "evidence_matrix.csv").is_file())
+            self.assertEqual(json.loads((root / "synthesis" / "model_selection.json").read_text(encoding="utf-8"))["status"], "draft")
+
+    def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            evidence = self.make_artifact(root, "synthesis/evidence/q1-baseline.txt", "diagnostics and robustness passed\n")
+            document = {
+                "schema_version": 1,
+                "status": "frozen",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "problem_structure": {
+                            "target": "estimate demand",
+                            "data": "hourly counts",
+                            "constraints": "nonnegative demand",
+                            "validation_anchor": "blocked time holdout",
+                        },
+                        "candidates": [
+                            {
+                                "model_id": "baseline",
+                                "role": "strong_baseline",
+                                "pre_fit_rationale": "matches the additive seasonal structure",
+                                "complexity_level": "low",
+                            }
+                        ],
+                        "strong_baseline_id": "baseline",
+                        "post_fit_evidence": [
+                            {
+                                "model_id": "baseline",
+                                "metric_summary": "holdout MAE recorded",
+                                "diagnostic_summary": "residual seasonality checked",
+                                "robustness_summary": "stable across time blocks",
+                                **evidence,
+                            }
+                        ],
+                        "selected_model_id": "baseline",
+                        "selection_rationale": "no structural failure justified a more complex alternative",
+                        "complexity_tradeoff": "extra components add cost without validated benefit",
+                        "rejected_models": [],
+                    }
+                ],
+            }
+            (root / "synthesis" / "model_selection.json").write_text(json.dumps(document), encoding="utf-8")
+            report = validate_model_selection(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
+            self.assertTrue(any("baseline" in item for item in report["warnings"]))
+
+    def test_scientific_review_blocks_unresolved_critical_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            evidence = self.make_artifact(root, "audits/review/critical.txt", "leakage found in split\n")
+            document = {
+                "schema_version": 1,
+                "status": "reviewed",
+                "policy": {"max_open_major": 1},
+                "coverage": [
+                    {"review_type": kind, "status": "pass", "rationale": "independently checked"}
+                    for kind in ("scientific", "statistical", "claims")
+                ],
+                "findings": [
+                    {
+                        "finding_id": "F1",
+                        "review_type": "statistical",
+                        "severity": "critical",
+                        "summary": "time leakage invalidates validation",
+                        "affected_claim_or_result": "Q1 forecast accuracy",
+                        "status": "open",
+                        "resolution": "replace random split with blocked holdout",
+                        **evidence,
+                    }
+                ],
+            }
+            (root / "audits" / "review_findings.json").write_text(json.dumps(document), encoding="utf-8")
+            report = validate_review_findings(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("critical" in item for item in report["errors"]))
 
     def test_benchmark_score_tracks_false_innovation_and_simplicity(self) -> None:
         report = score(
@@ -557,30 +677,35 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(report["build_status"], "skipped_upstream_block")
             self.assertFalse((root / "submission" / "submission_manifest.json").exists())
 
-    def test_cumcm_ai_gate_is_profile_driven(self) -> None:
+    def test_ai_gate_is_profile_driven_not_competition_hardcoded(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
             profile = {
-                "competition": "CUMCM",
+                "competition": "ANY-CONTEST",
+                "build": {"latex_engine": "xelatex", "main_document": "main.tex"},
                 "requirements": {
                     "ai": {
                         "usage_statement_required": True,
-                        "details_pdf_required": True,
+                        "details_pdf_required": False,
+                        "statement_source": "paper/sections/09_ai_statement.tex",
+                        "statement_enable_marker": "\\IncludeAIUsageStatementtrue",
                         "statement_position": "before_references",
                     }
                 },
             }
+            statement = root / "paper" / "sections" / "09_ai_statement.tex"
+            statement.write_text("\\section*{AI 工具使用声明}\n所有 AI 使用均由队员复核。\n", encoding="utf-8")
             metadata = root / "paper" / "generated" / "metadata.tex"
             metadata.write_text(
                 metadata.read_text(encoding="utf-8").replace("\\IncludeAIUsageStatementtrue", "\\IncludeAIUsageStatementfalse"),
                 encoding="utf-8",
             )
-            errors = check_cumcm_ai_compliance(root, profile)
-            self.assertTrue(any("AI usage statement" in item for item in errors))
+            errors = check_ai_compliance(root, profile)
+            self.assertTrue(any("not enabled" in item for item in errors))
             profile["requirements"]["ai"]["usage_statement_required"] = False
             profile["requirements"]["ai"]["details_pdf_required"] = False
-            self.assertEqual(check_cumcm_ai_compliance(root, profile), [])
+            self.assertEqual(check_ai_compliance(root, profile), [])
 
     def test_cumcm_ai_ledger_requires_inline_anchor_and_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -621,9 +746,9 @@ class WorkflowTests(unittest.TestCase):
                     }
                 },
             }
-            self.assertEqual(check_cumcm_ai_compliance(root, profile), [])
+            self.assertEqual(check_ai_compliance(root, profile), [])
             (root / "compliance" / "evidence" / "ai-use.txt").write_text("tampered\n", encoding="utf-8")
-            self.assertTrue(any("sha256" in item for item in check_cumcm_ai_compliance(root, profile)))
+            self.assertTrue(any("sha256" in item for item in check_ai_compliance(root, profile)))
 
 
 if __name__ == "__main__":

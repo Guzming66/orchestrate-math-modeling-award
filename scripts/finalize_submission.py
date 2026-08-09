@@ -21,14 +21,18 @@ from preflight import preflight
 from snapshot_environment import snapshot
 from validate_competition_profile import load_profile, validate_competition_profile
 from validate_innovation_portfolio import validate_innovation_portfolio
+from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
+from validate_review_findings import validate_review_findings
 from validate_task_board import validate_task_board
 
 
 PASS = {"pass", "verified", "done"}
 CORRECTION_CLEAR = {"clear", "checked", "not_applicable", "corrected_version_used"}
-A4_WIDTH_POINTS = 595.276
-A4_HEIGHT_POINTS = 841.89
+PAGE_SIZES_POINTS = {
+    "A4": (595.276, 841.89),
+    "LETTER": (612.0, 792.0),
+}
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -48,37 +52,6 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 def relative(workspace: Path, path: Path) -> str:
     return path.resolve().relative_to(workspace).as_posix()
-
-
-def check_gate_status(workspace: Path) -> list[str]:
-    errors: list[str] = []
-    document = load_json(workspace / "audits" / "gate_status.json")
-    gates = document.get("gates")
-    if not isinstance(gates, dict):
-        return ["audits/gate_status.json is missing or invalid"]
-    for gate_id in (f"G{index}" for index in range(8)):
-        gate = gates.get(gate_id)
-        if not isinstance(gate, dict):
-            errors.append(f"{gate_id}: gate record is missing")
-            continue
-        if str(gate.get("status", "")).lower() not in PASS:
-            errors.append(f"{gate_id}: status is not pass")
-        for field in ("reviewer", "checked_at"):
-            if not str(gate.get(field, "")).strip():
-                errors.append(f"{gate_id}: {field} is empty")
-        evidence = gate.get("evidence")
-        if not isinstance(evidence, list) or not evidence:
-            errors.append(f"{gate_id}: evidence is empty")
-        else:
-            for index, record in enumerate(evidence, start=1):
-                if not isinstance(record, dict):
-                    errors.append(f"{gate_id}: evidence {index} is not an artifact record")
-                    continue
-                errors.extend(artifact_errors(workspace, record, f"{gate_id} evidence {index}"))
-        blocking = gate.get("blocking_findings")
-        if isinstance(blocking, list) and blocking:
-            errors.append(f"{gate_id}: blocking findings remain")
-    return errors
 
 
 def bib_keys(path: Path) -> set[str]:
@@ -239,20 +212,6 @@ def check_reproduction(workspace: Path) -> list[str]:
     return errors
 
 
-def check_evidence_matrix(workspace: Path) -> list[str]:
-    rows = read_csv(workspace / "synthesis" / "evidence_matrix.csv")
-    selected = [row for row in rows if row.get("decision", "").strip().lower() in {"selected", "primary", "accepted"}]
-    if len(selected) != 1:
-        return [f"evidence matrix must contain exactly one selected branch; found {len(selected)}"]
-    row = selected[0]
-    errors: list[str] = []
-    if row.get("blocking_findings", "").strip():
-        errors.append("selected branch still has blocking findings")
-    if not row.get("decision_evidence", "").strip():
-        errors.append("selected branch has no decision evidence")
-    return errors
-
-
 def profile_requirements(profile: dict[str, object], group: str) -> dict[str, object]:
     requirements = profile.get("requirements")
     if not isinstance(requirements, dict):
@@ -261,28 +220,40 @@ def profile_requirements(profile: dict[str, object], group: str) -> dict[str, ob
     return value if isinstance(value, dict) else {}
 
 
-def check_cumcm_ai_compliance(workspace: Path, profile: dict[str, object]) -> list[str]:
+def check_ai_compliance(workspace: Path, profile: dict[str, object]) -> list[str]:
     ai = profile_requirements(profile, "ai")
-    if str(profile.get("competition", "")) != "CUMCM":
-        return []
     errors: list[str] = []
     paper = workspace / "paper"
     if ai.get("usage_statement_required") is True:
-        metadata_path = paper / "generated" / "metadata.tex"
-        metadata = strip_tex_comments(metadata_path.read_text(encoding="utf-8", errors="replace")) if metadata_path.is_file() else ""
-        switches = re.findall(r"\\IncludeAIUsageStatement(true|false)\b", metadata)
-        if not switches or switches[-1] != "true":
-            errors.append("competition profile requires the CUMCM AI usage statement")
-
-        statement_path = paper / "sections" / "09_ai_statement.tex"
+        statement_source = str(ai.get("statement_source", "") or "").replace("\\", "/").strip()
+        if not statement_source:
+            errors.append("competition profile requires statement_source for the AI usage statement")
+        statement_path = (workspace / statement_source).resolve()
+        try:
+            statement_path.relative_to(workspace)
+        except ValueError:
+            errors.append("competition profile AI statement_source escapes workspace")
+            statement_path = workspace / "__invalid__"
         statement = strip_tex_comments(statement_path.read_text(encoding="utf-8", errors="replace")) if statement_path.is_file() else ""
-        normalized = re.sub(r"\s+", "", statement)
-        if "本参赛队在竞赛过程中使用了AI工具" not in normalized:
-            errors.append("competition profile requires a truthful CUMCM AI-use declaration")
+        if not statement.strip() or "DRAFT CONTENT" in statement:
+            errors.append("competition profile requires a completed AI usage statement artifact")
 
-        main_path = paper / "main.tex"
+        enable_marker = str(ai.get("statement_enable_marker", "") or "").strip()
+        source_text = "\n".join(
+            strip_tex_comments(path.read_text(encoding="utf-8", errors="replace"))
+            for path in paper.rglob("*.tex")
+            if "build" not in path.relative_to(paper).parts
+        )
+        if not enable_marker or enable_marker not in source_text:
+            errors.append("competition profile AI usage statement is not enabled in the LaTeX source")
+
+        build = profile.get("build") if isinstance(profile.get("build"), dict) else {}
+        main_path = paper / str(build.get("main_document", "main.tex"))
         main = strip_tex_comments(main_path.read_text(encoding="utf-8", errors="replace")) if main_path.is_file() else ""
-        statement_position = main.find(r"\ifIncludeAIUsageStatement\input")
+        statement_token = Path(statement_source).with_suffix("").as_posix() if statement_source else ""
+        if statement_token.startswith("paper/"):
+            statement_token = statement_token[len("paper/"):]
+        statement_position = main.find(statement_token) if statement_token else -1
         bibliography_position = main.find("generated/bibliography.tex")
         position = str(ai.get("statement_position", "")).lower()
         if position == "before_references" and (
@@ -331,16 +302,47 @@ def check_cumcm_ai_compliance(workspace: Path, profile: dict[str, object]) -> li
                 errors.append(f"{label}: human_changes is empty")
         errors.extend(artifact_errors(workspace, row, f"{label} AI evidence"))
 
+    return errors
+
+
+# One-version compatibility alias for v8 callers.
+check_cumcm_ai_compliance = check_ai_compliance
+
+
+def check_required_artifacts(workspace: Path, profile: dict[str, object]) -> list[str]:
+    requirements = profile.get("requirements")
+    artifacts = requirements.get("artifacts") if isinstance(requirements, dict) else []
+    errors: list[str] = []
     support_manifest = load_json(workspace / "submission" / "support_manifest.json")
-    files = support_manifest.get("files")
-    normalized_files = {
-        str(item.get("source", "") if isinstance(item, dict) else item).replace("\\", "/")
-        for item in files
-    } if isinstance(files, list) else set()
-    details_filename = str(ai.get("details_filename", "") or "")
-    details_path = f"paper/build/{details_filename}" if details_filename else ""
-    if ai.get("details_pdf_required") is True and details_path not in normalized_files:
-        errors.append(f"competition profile requires {details_path} in support_manifest.json")
+    manifest_files = support_manifest.get("files")
+    archive_map: dict[str, str] = {}
+    if isinstance(manifest_files, list):
+        for item in manifest_files:
+            if isinstance(item, dict):
+                source = str(item.get("source", "")).replace("\\", "/")
+                archive_map[source] = str(item.get("archive_path", source)).replace("\\", "/")
+            else:
+                source = str(item).replace("\\", "/")
+                archive_map[source] = source
+    if not isinstance(artifacts, list):
+        return ["competition profile required artifacts are invalid"]
+    for item in artifacts:
+        if not isinstance(item, dict) or item.get("required") is not True:
+            continue
+        artifact_id = str(item.get("artifact_id", "required artifact"))
+        source = str(item.get("source_path", "")).replace("\\", "/")
+        archive_path = str(item.get("archive_path", "")).replace("\\", "/")
+        try:
+            path = (workspace / source).resolve()
+            path.relative_to(workspace)
+        except ValueError:
+            errors.append(f"{artifact_id}: source_path escapes workspace")
+            continue
+        if not path.is_file():
+            errors.append(f"{artifact_id}: required artifact is missing: {source}")
+        if profile_requirements(profile, "submission").get("support_archive_required") is True:
+            if archive_map.get(source) != archive_path:
+                errors.append(f"{artifact_id}: support manifest does not map {source} to {archive_path}")
     return errors
 
 
@@ -369,13 +371,17 @@ def check_paper_against_profile(
         elif value > limit:
             errors.append(f"paper exceeds profile {profile_key}: {value} > {limit}")
     page_size = str(paper.get("page_size", "") or "").upper()
-    if page_size == "A4":
+    if page_size in PAGE_SIZES_POINTS:
         width = build_report.get("page_width_points")
         height = build_report.get("page_height_points")
         if not isinstance(width, (int, float)) or not isinstance(height, (int, float)):
-            errors.append("unable to verify profile A4 page size")
-        elif abs(float(width) - A4_WIDTH_POINTS) > 2.0 or abs(float(height) - A4_HEIGHT_POINTS) > 2.0:
-            errors.append(f"paper is not portrait A4: {width} x {height} pt")
+            errors.append(f"unable to verify profile {page_size} page size")
+        else:
+            expected_width, expected_height = PAGE_SIZES_POINTS[page_size]
+            if abs(float(width) - expected_width) > 2.0 or abs(float(height) - expected_height) > 2.0:
+                errors.append(f"paper is not portrait {page_size}: {width} x {height} pt")
+    elif page_size:
+        errors.append(f"paper page size cannot be executed by this finalizer: {page_size}")
     if paper.get("anonymous") is True and str(build_report.get("pdf_author", "") or "").strip():
         errors.append("competition profile requires anonymous PDF metadata")
     if paper.get("table_of_contents_allowed") is False:
@@ -420,14 +426,14 @@ def run_citation_validator(workspace: Path) -> tuple[int, str]:
     return result.returncode, result.stdout
 
 
-def run_build(workspace: Path, competition: str, main_name: str = "main.tex") -> tuple[int, dict[str, object]]:
+def run_build(workspace: Path, engine: str, main_name: str = "main.tex") -> tuple[int, dict[str, object]]:
     script = Path(__file__).with_name("build_latex.py")
     command = [
         sys.executable,
         str(script),
         str(workspace / "paper"),
-        "--competition",
-        competition,
+        "--engine",
+        engine,
         "--main",
         main_name,
         "--mode",
@@ -444,9 +450,14 @@ def finalize(workspace: Path) -> dict[str, object]:
     warnings: list[str] = []
     manifest = load_json(workspace / "competition_manifest.json")
     competition = str(manifest.get("competition", ""))
-    if competition not in {"CUMCM", "MCM", "ICM"}:
+    if not competition:
         errors.append("competition manifest is missing or invalid")
+    if manifest.get("workflow_stage") != "submission":
+        errors.append("workflow_stage must be submission before finalization")
     profile = load_profile(workspace / "compliance" / "competition_profile.json")
+    build_configuration = profile.get("build") if isinstance(profile.get("build"), dict) else {}
+    engine = str(build_configuration.get("latex_engine", ""))
+    main_document = str(build_configuration.get("main_document", "main.tex"))
 
     preflight_report = preflight(workspace, competition)
     errors.extend(str(item) for item in preflight_report.get("errors", []))
@@ -475,18 +486,24 @@ def finalize(workspace: Path) -> dict[str, object]:
     errors.extend(str(item) for item in paper_innovation_report.get("errors", []))
     warnings.extend(str(item) for item in paper_innovation_report.get("warnings", []))
 
+    model_selection_report = validate_model_selection(workspace)
+    errors.extend(str(item) for item in model_selection_report.get("errors", []))
+    warnings.extend(str(item) for item in model_selection_report.get("warnings", []))
+
+    review_report = validate_review_findings(workspace)
+    errors.extend(str(item) for item in review_report.get("errors", []))
+    warnings.extend(str(item) for item in review_report.get("warnings", []))
+
     citation_exit, citation_output = run_citation_validator(workspace)
     if citation_exit != 0:
         errors.append("citation validator failed")
 
     checks = {
-        "gates": check_gate_status(workspace),
         "citations": check_citations(workspace),
         "data_provenance": check_data_provenance(workspace),
         "results": check_results(workspace),
         "reproduction": check_reproduction(workspace),
-        "evidence_matrix": check_evidence_matrix(workspace),
-        "cumcm_ai": check_cumcm_ai_compliance(workspace, profile),
+        "ai": check_ai_compliance(workspace, profile),
     }
     for findings in checks.values():
         errors.extend(findings)
@@ -495,7 +512,7 @@ def finalize(workspace: Path) -> dict[str, object]:
         build_exit, build_report = 1, {"status": "skipped_upstream_block"}
         warnings.append("submission LaTeX build skipped because upstream hard gates failed")
     else:
-        build_exit, build_report = run_build(workspace, competition) if competition else (1, {})
+        build_exit, build_report = run_build(workspace, engine, main_document) if engine else (1, {})
     if build_report.get("status") != "skipped_upstream_block" and (
         build_exit != 0 or build_report.get("status") != "pass"
     ):
@@ -508,15 +525,24 @@ def finalize(workspace: Path) -> dict[str, object]:
 
     ai_details_report: dict[str, object] = {"status": "not_applicable"}
     ai_requirements = profile_requirements(profile, "ai")
-    if not errors and competition == "CUMCM" and ai_requirements.get("details_pdf_required") is True:
+    if not errors and ai_requirements.get("details_pdf_required") is True:
         details_filename = str(ai_requirements.get("details_filename", "") or "").strip()
+        details_source = str(ai_requirements.get("details_source", "") or "").strip()
         if not details_filename:
             ai_details_report = {"status": "block", "errors": ["AI details filename is empty"]}
             errors.append("competition profile AI details filename is empty")
+        elif not details_source:
+            ai_details_report = {"status": "block", "errors": ["AI details source is empty"]}
+            errors.append("competition profile AI details source is empty")
         else:
-            ai_exit, ai_details_report = run_build(workspace, competition, "ai_usage_details.tex")
+            details_path = Path(details_source.replace("\\", "/"))
+            try:
+                ai_main = details_path.relative_to("paper").as_posix()
+            except ValueError:
+                ai_main = details_path.as_posix()
+            ai_exit, ai_details_report = run_build(workspace, engine, ai_main)
             if ai_exit != 0 or ai_details_report.get("status") != "pass":
-                errors.append("CUMCM AI usage details LaTeX build failed")
+                errors.append("AI usage details LaTeX build failed")
                 errors.extend(str(item) for item in ai_details_report.get("errors", []))
             else:
                 source = Path(str(ai_details_report.get("pdf", "")))
@@ -542,6 +568,10 @@ def finalize(workspace: Path) -> dict[str, object]:
             errors.append("support package failed")
             errors.extend(str(item) for item in package_report.get("errors", []))
 
+    artifact_errors_after_build = check_required_artifacts(workspace, profile)
+    checks["required_artifacts"] = artifact_errors_after_build
+    errors.extend(artifact_errors_after_build)
+
     errors = sorted(set(errors))
     warnings = sorted(set(warnings))
     status = "pass" if not errors else "block"
@@ -557,6 +587,8 @@ def finalize(workspace: Path) -> dict[str, object]:
         "task_status": task_report.get("status"),
         "innovation_status": innovation_report.get("status"),
         "paper_innovation_status": paper_innovation_report.get("status"),
+        "model_selection_status": model_selection_report.get("status"),
+        "review_status": review_report.get("status"),
         "citation_validator_output": citation_output[-4000:],
         "build_status": build_report.get("status"),
         "ai_details_build_status": ai_details_report.get("status"),

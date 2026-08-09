@@ -41,7 +41,7 @@
 \input{sections/00_summary.tex}
 \par\medskip\noindent\textbf{Keywords:} \PaperKeywords
 \clearpage
-\typeout{MATHAWARD:FRONT_MATTER_PAGES=\number\numexpr\value{page}-1\relax}
+\typeout{MATHMODEL:FRONT_MATTER_PAGES=\number\numexpr\value{page}-1\relax}
 
 \input{sections/01_problem_restatement.tex}
 \input{sections/02_problem_analysis.tex}
@@ -59,7 +59,7 @@
 \clearpage
 \setcounter{mathawardmainsolutionpages}{\value{page}}
 \addtocounter{mathawardmainsolutionpages}{-1}
-\typeout{MATHAWARD:MCM_MAIN_PAGES=\arabic{mathawardmainsolutionpages}}
+\typeout{MATHMODEL:BODY_PAGES=\arabic{mathawardmainsolutionpages}}
 
 \ifIncludeAIReport
   \section*{Report on Use of AI}

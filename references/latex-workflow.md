@@ -33,16 +33,16 @@ paper/
 
 ## 构建循环
 
-国赛使用 XeLaTeX，美赛使用 pdfLaTeX。优先运行：
+从当前 Competition Profile v2 的 `build.latex_engine` 读取引擎。不要根据赛事名或年份推断。示例：
 
 ```text
-python <skill>/scripts/build_latex.py <workspace>/paper --competition CUMCM --mode draft
-python <skill>/scripts/build_latex.py <workspace>/paper --competition MCM --mode submission
+python <skill>/scripts/build_latex.py <workspace>/paper --engine xelatex --mode draft
+python <skill>/scripts/build_latex.py <workspace>/paper --engine pdflatex --mode submission
 ```
 
 构建工具调用 `latexmk`，自动完成必要的 BibTeX 轮次，不依赖 Pandoc。草稿模式允许明确的标题和队号占位符；提交模式将其视为阻断项。
 
-构建器只负责直编 LaTeX、通用占位符/日志检查并报告页数、正文起点、纸张、大小和元数据；它不从比赛名称或年份猜规则。`finalize_submission.py` 只按已核验 `competition_profile.json` 执行 A4、页数、大小、目录、匿名性和附加材料门禁。自动检查不能替代匿名与附件人工审计。
+构建器只负责直编 LaTeX、通用占位符/日志检查并报告页数、正文起点、纸张、大小和元数据。`finalize_submission.py` 只按已核验 `competition_profile.json` 执行纸张、页数、大小、目录、匿名性和附加材料门禁。自动检查不能替代匿名与附件人工审计。
 
 每次新增公式、表格、图片、引用或章节后重新构建。不要等到最后才发现宏包、浮动体或交叉引用问题。读取 `paper/build/build_report.json`，修复所有 `errors`；逐项判断 `warnings`。
 
@@ -78,13 +78,13 @@ python <citation-management>/scripts/validate_citations.py <workspace>/paper/ref
 
 若当届规则要求 AI 或其他工具使用说明，直接用相应 `.tex` 模板生成 PDF；不要先生成 Word 或 Markdown 再转换。把实质使用登记到 `compliance/ai_usage_ledger.csv`，并按 profile 检查正文锚点、工具引用、人工修改/核验、交互证据和官方文件名。本 Skill 不把某届或某赛事的披露位置套用到另一届。
 
-需要生成国赛 AI 使用说明时，可运行：
+需要生成 profile 指定的独立 AI 使用说明时，用相同 profile 引擎和 `details_source` 文件名运行：
 
 ```text
-python <skill>/scripts/build_latex.py <workspace>/paper --competition CUMCM --main ai_usage_details.tex --mode submission
+python <skill>/scripts/build_latex.py <workspace>/paper --engine xelatex --main ai_usage_details.tex --mode submission
 ```
 
-最终器会按 verified profile 的 `details_filename` 命名直编结果，并要求支撑清单包含该文件；打包位置同样由清单决定。美赛的相应内容可写入 `paper/sections/99_ai_report.tex`，由主论文按当届版面规则编译。
+最终器会按 verified profile 的 `details_source` 构建，再按 `details_filename` 命名；是否进入支撑包及包内路径由 `requirements.artifacts` 与支撑清单决定。
 
 ## CUMCM 附录与支撑材料同步
 

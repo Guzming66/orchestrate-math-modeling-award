@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 8
+WORKFLOW_VERSION = 9
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -186,6 +186,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "innovation_mode": args.innovation_mode,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "initialized",
+        "workflow_stage": "rule_verification",
         "paper_pipeline": "direct-latex",
         "paper_source": "paper/main.tex",
         "paper_profile": profile,
@@ -202,7 +203,6 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "audits/data",
         "audits/citations",
         "audits/rules",
-        "audits/benchmark",
         "audits/statistics",
         "audits/uncertainty",
         "audits/reproduction",
@@ -320,7 +320,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
     for filename, fields in innovation_headers.items():
         write_csv_header_if_missing(root / "innovation" / filename, fields)
     competition_profile: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "profile_id": f"{args.competition}-{args.year}-unverified",
         "competition": args.competition,
         "edition": str(args.year),
@@ -330,6 +330,10 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "verified_at": "",
         "verified_by": None,
         "sources": [],
+        "build": {
+            "latex_engine": engine,
+            "main_document": "main.tex",
+        },
         "requirements": {
             "paper": {
                 "format": None,
@@ -349,33 +353,45 @@ def create_workspace(args: argparse.Namespace) -> Path:
                 "policy_checked": False,
                 "usage_statement_required": None,
                 "details_pdf_required": None,
+                "statement_source": None,
+                "statement_enable_marker": None,
                 "statement_position": None,
                 "inline_disclosure_required": None,
                 "tool_reference_required": None,
                 "human_verification_required": None,
+                "details_source": None,
                 "details_filename": None,
             },
+            "artifacts": [],
         },
-        "notes": "Populate only from current official source snapshots; do not infer rules from year.",
+        "rule_bindings": [],
+        "notes": "Populate only from current official source snapshots. Bind every executable requirement to an exact source locator; do not infer rules from year.",
     }
     write_json_if_missing(root / "compliance" / "competition_profile.json", competition_profile)
 
     write_json_if_missing(
-        root / "audits" / "gate_status.json",
+        root / "synthesis" / "model_selection.json",
         {
-            "status": "not_reviewed",
-            "gates": {
-                f"G{index}": {
-                    "status": "pending",
-                    "reviewer": "",
-                    "checked_at": "",
-                    "evidence": [],
-                    "blocking_findings": [],
-                }
-                for index in range(8)
-            },
+            "schema_version": 1,
+            "status": "draft",
+            "questions": [],
+            "notes": "Record one decision per core question. A strong baseline may remain selected when alternatives add no validated value.",
         },
     )
+    write_json_if_missing(
+        root / "audits" / "review_findings.json",
+        {
+            "schema_version": 1,
+            "status": "not_reviewed",
+            "policy": {"max_open_major": 0 if args.innovation_mode == "championship" else 1},
+            "coverage": [
+                {"review_type": review_type, "status": "pending", "rationale": ""}
+                for review_type in ("scientific", "statistical", "claims")
+            ],
+            "findings": [],
+        },
+    )
+
     write_json_if_missing(
         root / "audits" / "reproduction" / "reproduction_status.json",
         {
@@ -526,11 +542,12 @@ def create_workspace(args: argparse.Namespace) -> Path:
         joined_models = ";".join(model_task_ids)
         task_rows.extend(
             [
-                ["synthesis", "all", "synthesis", joined_models, "", "synthesis", "", "", "select one strongest reproducible solution", "pending", "true", "evidence matrix and selected solution", ""],
-                ["reproduction", "all", "reproduction", "synthesis", "", "audits/reproduction", "", "", "rerun selected baseline", "pending", "true", "clean-run report", ""],
-                ["paper", "all", "writing", "synthesis", "", "paper", "", "", "minimal complete paper", "pending", "true", "direct-LaTeX paper", ""],
+                ["model-freeze", "all", "selection", joined_models, "", "synthesis/model_selection.json", "", "", "select the best validated solution, including the baseline when warranted", "pending", "true", "question-level model decisions and rejection reasons", ""],
+                ["reproduction", "all", "reproduction", "model-freeze", "", "audits/reproduction", "", "", "rerun selected solution", "pending", "true", "clean-run report", ""],
+                ["paper", "all", "writing", "model-freeze", "", "paper", "", "", "minimal complete paper", "pending", "true", "direct-LaTeX paper", ""],
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
-                ["submission", "all", "submission", "paper;citation-audit;reproduction", "", "submission", "", "", "submit reproducible baseline package", "pending", "true", "paper PDF and support archive", ""],
+                ["scientific-review", "all", "review", "paper;citation-audit;reproduction", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "scientific, statistical and claim review", ""],
+                ["submission", "all", "submission", "scientific-review", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
             ]
         )
         with task_board_path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -556,13 +573,6 @@ def create_workspace(args: argparse.Namespace) -> Path:
 
     if args.competition == "CUMCM":
         write_text_if_missing(
-            root / "audits" / "benchmark" / "excellent_paper_review.md",
-            "# Displayed-paper benchmark review\n\n"
-            "Use a de-problematized structure card.\n\n"
-            "| source/year/problem | task family | abstract evidence map | problem dependency | baseline/validation | figure duties | transferable structure | problem-specific content not to copy |\n"
-            "|---|---|---|---|---|---|---|---|\n",
-        )
-        write_text_if_missing(
             root / "compliance" / "submission_checklist.md",
             "# CUMCM submission checklist\n\n"
             "- [ ] Versioned competition_profile.json is verified against current official source snapshots and hashes\n"
@@ -581,36 +591,10 @@ def create_workspace(args: argparse.Namespace) -> Path:
             "- [ ] Any additional material explicitly required by current rules is present\n"
             "- [ ] Task dependencies are closed and every blocking task has an owner, evidence and fallback\n"
             "- [ ] Support archive was built from support_manifest.json and passed identity/secret scanning\n"
-            "- [ ] G0-G7 are marked pass with reviewer, timestamp and evidence\n"
+            "- [ ] Independent scientific, statistical and claim review is closed\n"
             "- [ ] Submission build passes and every rendered PDF page has been visually inspected\n"
             "- [ ] Uploaded files match frozen hashes\n",
         )
-
-    matrix_path = root / "synthesis" / "evidence_matrix.csv"
-    if not matrix_path.exists():
-        with matrix_path.open("w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(
-                [
-                    "branch",
-                    "problem_fit",
-                    "assumption_risk",
-                    "data_support",
-                    "innovation_claim_ids",
-                    "innovation_claim_status",
-                    "baseline_gain",
-                    "diagnostic_quality",
-                    "uncertainty_stability",
-                    "reproducibility",
-                    "interpretability",
-                    "implementation_risk",
-                    "paper_communicability",
-                    "rule_compliance",
-                    "blocking_findings",
-                    "decision",
-                    "decision_evidence",
-                ]
-            )
 
     initialize_paper(root, args.competition, args.problem)
     return root
@@ -629,7 +613,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--year", required=True, type=int)
     parser.add_argument("--problem", required=True)
     parser.add_argument("--branches", type=int, default=1, choices=range(1, 9))
-    parser.add_argument("--innovation-mode", choices=("fast", "standard", "championship"), default="standard")
+    parser.add_argument("--innovation-mode", choices=("standard", "championship"), default="standard")
     return parser.parse_args()
 
 

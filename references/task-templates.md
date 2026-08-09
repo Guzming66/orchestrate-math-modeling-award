@@ -126,4 +126,4 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
 
-按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有论文、profile 要求的支撑包、所有哈希、匿名/凭据扫描和 G0—G7 同时通过才允许放行。
+按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有模型选择、创新主张、科学审查、论文、profile 要求的支撑包、所有哈希和匿名/凭据扫描同时通过才允许放行。

@@ -40,7 +40,7 @@ def validate_paper_innovation(workspace: Path) -> dict[str, object]:
     }
     promoted.discard("")
     if not promoted:
-        errors.append("no promoted innovation claim is available for paper mapping")
+        warnings.append("no innovation claim was promoted; strong innovation wording is prohibited")
     rows = read_csv(workspace / "synthesis" / "innovation_claims.csv")
     by_claim: dict[str, list[dict[str, str]]] = {}
     for row in rows:

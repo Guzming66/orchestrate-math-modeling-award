@@ -87,7 +87,7 @@ def fallback_build(paper_dir: Path, main: Path, engine: str, build_dir: Path) ->
 def compile_paper(paper_dir: Path, main: Path, engine: str, build_dir: Path) -> subprocess.CompletedProcess[str]:
     latexmk = shutil.which("latexmk")
     if latexmk:
-        engine_flag = "-xelatex" if engine == "xelatex" else "-pdf"
+        engine_flag = {"xelatex": "-xelatex", "lualatex": "-lualatex", "pdflatex": "-pdf"}[engine]
         return run(
             [
                 latexmk,
@@ -124,12 +124,7 @@ def strip_tex_comments(text: str) -> str:
     return "\n".join(cleaned)
 
 
-def scan_sources(
-    paper_dir: Path,
-    mode: str,
-    competition: str,
-    main_name: str,
-) -> list[str]:
+def scan_sources(paper_dir: Path, mode: str) -> list[str]:
     if mode != "submission":
         return []
     errors: list[str] = []
@@ -212,7 +207,8 @@ def pdf_metadata(pdf_path: Path) -> tuple[dict[str, object], str | None]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compile and audit a direct-LaTeX contest paper.")
     parser.add_argument("paper_dir", help="Directory containing main.tex")
-    parser.add_argument("--competition", required=True, choices=tuple(ENGINE_BY_COMPETITION))
+    parser.add_argument("--engine", choices=("xelatex", "pdflatex", "lualatex"))
+    parser.add_argument("--competition", choices=tuple(ENGINE_BY_COMPETITION), help="Legacy shortcut; prefer --engine from a verified profile")
     parser.add_argument("--mode", choices=("draft", "submission"), default="draft")
     parser.add_argument("--main", default="main.tex")
     return parser.parse_args()
@@ -231,13 +227,15 @@ def main() -> int:
         report_path = build_dir / f"build_report_{main_path.stem}.json"
         stdout_path = build_dir / f"build_stdout_{main_path.stem}.log"
 
-    errors = scan_sources(paper_dir, args.mode, args.competition, main_path.name)
+    errors = scan_sources(paper_dir, args.mode)
     warnings: list[str] = []
-    engine = ENGINE_BY_COMPETITION[args.competition]
+    engine = args.engine or ENGINE_BY_COMPETITION.get(args.competition or "", "")
+    if not engine:
+        errors.append("LaTeX engine is not specified; use --engine or the legacy --competition shortcut")
     if not main_path.is_file():
         errors.append(f"main file is missing: {main_path}")
         result = subprocess.CompletedProcess([], 1, "")
-    elif not shutil.which(engine):
+    elif not engine or not shutil.which(engine):
         errors.append(f"LaTeX engine is missing: {engine}")
         result = subprocess.CompletedProcess([], 1, "")
     else:
@@ -279,10 +277,10 @@ def main() -> int:
     else:
         errors.append("compiled PDF is missing")
 
-    front_match = re.search(r"MATHAWARD:FRONT_MATTER_PAGES=(\d+)", log_text)
+    front_match = re.search(r"(?:MATHMODEL|MATHAWARD):FRONT_MATTER_PAGES=(\d+)", log_text)
     if front_match:
         front_matter_pages = int(front_match.group(1))
-    body_match = re.search(r"MATHAWARD:(?:CUMCM_BODY|MCM_MAIN)_PAGES=(\d+)", log_text)
+    body_match = re.search(r"(?:MATHMODEL|MATHAWARD):(?:CUMCM_BODY|MCM_MAIN|BODY)_PAGES=(\d+)", log_text)
     if body_match:
         body_pages = int(body_match.group(1))
 

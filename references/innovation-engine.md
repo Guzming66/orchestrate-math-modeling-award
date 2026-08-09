@@ -18,7 +18,6 @@
 
 | mode | claim 目标 | innovation axis 目标 | scout 目标 | 类比目标 |
 |---|---:|---:|---:|---:|
-| `fast` | 3 | 2 | 2 | 0 |
 | `standard` | 6 | 4 | 3 | 1 |
 | `championship` | 8 | 5 | 4 | 1 |
 
@@ -83,7 +82,7 @@ Critic 先执行硬否决，再由 Jury 做 Pareto/lexicographic 裁决，不计
 
 `problem fit → evidence → necessity → novelty → robustness → parsimony → communication`
 
-Jury 的 1–5 分只作诊断：问题贴合、证据强度、必要性、新颖性、稳健性、简洁性和表达清晰度。最终至少晋级一个证据充分的 `primary` claim，可有 supporting claims；不要求 safe/stretch，也不限制为 2–3 个模型。正式建模可以只保留一个主方案，`synthesis/evidence_matrix.csv` 仍只选择一个最终 solution branch。
+Jury 的 1–5 分只作诊断：问题贴合、证据强度、必要性、新颖性、稳健性、简洁性和表达清晰度。最终至少晋级一个证据充分的 `primary` claim，可有 supporting claims；不要求 safe/stretch，也不限制为 2–3 个模型。最终 solution 由 `synthesis/model_selection.json` 按每个核心小题保存拟合前理由、拟合后证据、选择理由和淘汰理由。
 
 ## 真正的阻断条件
 

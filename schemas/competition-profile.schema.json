@@ -1,99 +1,126 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Guzming66/orchestrate-math-modeling-award/schemas/competition-profile.schema.json",
-  "title": "Versioned competition profile",
+  "$id": "https://example.invalid/orchestrate-math-modeling/competition-profile-v2.schema.json",
+  "title": "Versioned Competition Profile v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version",
-    "profile_id",
-    "competition",
-    "edition",
-    "status",
-    "effective_from",
-    "effective_to",
-    "verified_at",
-    "verified_by",
-    "sources",
-    "requirements"
+    "schema_version", "profile_id", "competition", "edition", "status",
+    "verified_at", "sources", "build", "requirements", "rule_bindings"
   ],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "profile_id": {"type": "string", "minLength": 1},
-    "competition": {"enum": ["CUMCM", "MCM", "ICM"]},
+    "competition": {"type": "string", "minLength": 1},
     "edition": {"type": "string", "minLength": 1},
     "status": {"enum": ["unverified", "verified", "superseded"]},
-    "effective_from": {"type": "string"},
+    "effective_from": {"type": ["string", "null"]},
     "effective_to": {"type": ["string", "null"]},
     "verified_at": {"type": "string"},
     "verified_by": {"type": ["string", "null"]},
     "sources": {
       "type": "array",
-      "items": {"$ref": "#/$defs/artifactSource"}
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "kind", "url", "artifact_path", "sha256", "command_or_check", "checked_at"],
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "url": {"type": "string", "minLength": 1},
+          "artifact_path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "command_or_check": {"type": "string", "minLength": 1},
+          "checked_at": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latex_engine", "main_document"],
+      "properties": {
+        "latex_engine": {"enum": ["xelatex", "pdflatex", "lualatex"]},
+        "main_document": {"type": "string", "minLength": 1}
+      }
     },
     "requirements": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["paper", "submission", "ai"],
+      "required": ["paper", "submission", "ai", "artifacts"],
       "properties": {
-        "paper": {"$ref": "#/$defs/paper"},
-        "submission": {"$ref": "#/$defs/submission"},
-        "ai": {"$ref": "#/$defs/ai"}
+        "paper": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "max_front_matter_pages", "max_total_pages", "max_body_pages", "max_pdf_bytes", "page_size", "table_of_contents_allowed", "anonymous"],
+          "properties": {
+            "format": {"type": ["string", "null"]},
+            "max_front_matter_pages": {"type": ["integer", "null"], "minimum": 0},
+            "max_total_pages": {"type": ["integer", "null"], "minimum": 1},
+            "max_body_pages": {"type": ["integer", "null"], "minimum": 1},
+            "max_pdf_bytes": {"type": ["integer", "null"], "minimum": 1},
+            "page_size": {"type": ["string", "null"]},
+            "table_of_contents_allowed": {"type": ["boolean", "null"]},
+            "anonymous": {"type": ["boolean", "null"]}
+          }
+        },
+        "submission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["support_archive_required", "support_archive_max_bytes"],
+          "properties": {
+            "support_archive_required": {"type": ["boolean", "null"]},
+            "support_archive_max_bytes": {"type": ["integer", "null"], "minimum": 1}
+          }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy_checked", "usage_statement_required", "details_pdf_required", "statement_source", "statement_enable_marker", "statement_position", "inline_disclosure_required", "tool_reference_required", "human_verification_required", "details_source", "details_filename"],
+          "properties": {
+            "policy_checked": {"type": "boolean"},
+            "usage_statement_required": {"type": ["boolean", "null"]},
+            "details_pdf_required": {"type": ["boolean", "null"]},
+            "statement_source": {"type": ["string", "null"]},
+            "statement_enable_marker": {"type": ["string", "null"]},
+            "statement_position": {"type": ["string", "null"]},
+            "inline_disclosure_required": {"type": ["boolean", "null"]},
+            "tool_reference_required": {"type": ["boolean", "null"]},
+            "human_verification_required": {"type": ["boolean", "null"]},
+            "details_source": {"type": ["string", "null"]},
+            "details_filename": {"type": ["string", "null"]}
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact_id", "required", "source_path", "archive_path"],
+            "properties": {
+              "artifact_id": {"type": "string", "minLength": 1},
+              "required": {"type": "boolean"},
+              "source_path": {"type": "string", "minLength": 1},
+              "archive_path": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "rule_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement_pointer", "source_id", "locator", "evidence_sha256"],
+        "properties": {
+          "requirement_pointer": {"type": "string", "pattern": "^/requirements/"},
+          "source_id": {"type": "string", "minLength": 1},
+          "locator": {"type": "string", "minLength": 1},
+          "evidence_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+        }
       }
     },
     "notes": {"type": "string"}
-  },
-  "$defs": {
-    "artifactSource": {
-      "type": "object",
-      "required": ["kind", "url", "artifact_path", "sha256", "command_or_check", "checked_at"],
-      "properties": {
-        "kind": {"type": "string", "minLength": 1},
-        "url": {"type": "string", "minLength": 1},
-        "artifact_path": {"type": "string", "minLength": 1},
-        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
-        "command_or_check": {"type": "string", "minLength": 1},
-        "checked_at": {"type": "string", "minLength": 1}
-      }
-    },
-    "paper": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["format", "max_front_matter_pages", "max_total_pages", "max_body_pages", "max_pdf_bytes", "page_size", "table_of_contents_allowed", "anonymous"],
-      "properties": {
-        "format": {"const": "pdf"},
-        "max_front_matter_pages": {"type": ["integer", "null"], "minimum": 1},
-        "max_total_pages": {"type": ["integer", "null"], "minimum": 1},
-        "max_body_pages": {"type": ["integer", "null"], "minimum": 1},
-        "max_pdf_bytes": {"type": ["integer", "null"], "minimum": 1},
-        "page_size": {"type": ["string", "null"]},
-        "table_of_contents_allowed": {"type": "boolean"},
-        "anonymous": {"type": "boolean"}
-      }
-    },
-    "submission": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["support_archive_required", "support_archive_max_bytes"],
-      "properties": {
-        "support_archive_required": {"type": "boolean"},
-        "support_archive_max_bytes": {"type": ["integer", "null"], "minimum": 1}
-      }
-    },
-    "ai": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["policy_checked", "usage_statement_required", "details_pdf_required", "statement_position", "inline_disclosure_required", "tool_reference_required", "human_verification_required", "details_filename"],
-      "properties": {
-        "policy_checked": {"type": "boolean"},
-        "usage_statement_required": {"type": "boolean"},
-        "details_pdf_required": {"type": "boolean"},
-        "statement_position": {"enum": ["before_references", "after_references", null]},
-        "inline_disclosure_required": {"type": "boolean"},
-        "tool_reference_required": {"type": "boolean"},
-        "human_verification_required": {"type": "boolean"},
-        "details_filename": {"type": ["string", "null"]}
-      }
-    }
   }
 }
