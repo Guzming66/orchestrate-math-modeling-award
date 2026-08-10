@@ -24,8 +24,10 @@ from validate_competition_profile import validate_competition_profile
 from validate_innovation_portfolio import validate_innovation_portfolio
 from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
+from validate_paper_presentation import validate_paper_presentation
 from validate_paper_question_coverage import validate_paper_question_coverage
 from validate_review_findings import validate_review_findings
+from validate_review_route import validate_review_route
 from validate_task_board import validate_task_board
 
 
@@ -230,6 +232,7 @@ class WorkflowTests(unittest.TestCase):
                     "scout_id": "S1",
                     "innovation_axis": "objective_constraint",
                     "problem_structure": "the predicted shares must satisfy a conservation identity",
+                    "reasoning_path": "failure_driven",
                     "baseline": "ordinary least squares without a conservation constraint",
                     "baseline_failure": "the fitted shares do not sum to the conserved total",
                     "failure_evidence_artifact": failure["artifact_path"],
@@ -362,18 +365,28 @@ class WorkflowTests(unittest.TestCase):
                 "competition_manifest.json",
                 "compliance/competition_profile.json",
                 "innovation/baseline_failure_map.md",
+                "innovation/strong_baseline.md",
+                "innovation/semantic_fidelity_map.md",
                 "innovation/opportunity_map.md",
                 "innovation/claim_portfolio.csv",
                 "innovation/claim_experiments.csv",
                 "synthesis/innovation_claims.csv",
                 "synthesis/model_selection.json",
+                "synthesis/review_route.json",
+                "synthesis/paper_payload.json",
                 "audits/review_findings.json",
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 9)
+            self.assertEqual(manifest["workflow_version"], 10)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["branches"], ["model-a"])
+            self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
+            with (root / "shared" / "task_board.csv").open(encoding="utf-8-sig", newline="") as handle:
+                tasks = {row["task_id"]: row for row in csv.DictReader(handle)}
+            self.assertNotIn("innovation-selection", tasks["model-a"]["depends_on"])
+            self.assertEqual(tasks["innovation-selection"]["blocking"], "false")
+            self.assertNotEqual(tasks["strong-baseline"]["assigned_path"], tasks["baseline-failure"]["assigned_path"])
 
     def test_initializer_refuses_to_partially_upgrade_old_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -500,6 +513,7 @@ class WorkflowTests(unittest.TestCase):
                     "claim_id": "C1",
                     "claim_sentence": sentence,
                     "problem_structure": "conservation identity",
+                    "reasoning_path": "failure_driven",
                     "baseline_failure": "unconstrained fit violates conservation",
                     "method_change": "one equality constraint",
                     "evidence_result_ids": "R1",
@@ -562,7 +576,7 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 9)
+            self.assertEqual(manifest["workflow_version"], 10)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["innovation_mode"], "standard")
             profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
@@ -574,17 +588,66 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((root / "synthesis" / "evidence_matrix.csv").is_file())
             self.assertEqual(json.loads((root / "synthesis" / "model_selection.json").read_text(encoding="utf-8"))["status"], "draft")
 
+    def test_v9_migration_preserves_verified_profile_but_resets_changed_schemas(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for relative in ("innovation", "compliance", "synthesis", "shared", "audits"):
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            (root / "competition_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 9,
+                        "workflow_version": 9,
+                        "competition": "CUMCM",
+                        "year": 2026,
+                        "branches": ["model-a"],
+                        "innovation_mode": "championship",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            verified_profile = {"schema_version": 2, "status": "verified", "profile_id": "fixture-v2"}
+            (root / "compliance" / "competition_profile.json").write_text(json.dumps(verified_profile), encoding="utf-8")
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 1, "status": "frozen", "questions": [{"question_id": "Q1"}]}),
+                encoding="utf-8",
+            )
+            (root / "audits" / "review_findings.json").write_text(
+                json.dumps({"schema_version": 1, "status": "reviewed", "coverage": [], "findings": []}),
+                encoding="utf-8",
+            )
+            (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
+
+            report = migrate(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
+            self.assertEqual(
+                json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8")),
+                verified_profile,
+            )
+            self.assertTrue((root / "synthesis" / "model_selection_v9.json").is_file())
+            self.assertTrue((root / "audits" / "review_findings_v9.json").is_file())
+            self.assertEqual(
+                json.loads((root / "synthesis" / "model_selection.json").read_text(encoding="utf-8"))["schema_version"],
+                2,
+            )
+            self.assertEqual(
+                json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8"))["status"],
+                "not_reviewed",
+            )
+            self.assertTrue((root / "innovation" / "semantic_fidelity_map.md").is_file())
+
     def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
             evidence = self.make_artifact(root, "synthesis/evidence/q1-baseline.txt", "diagnostics and robustness passed\n")
             document = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "frozen",
                 "questions": [
                     {
                         "question_id": "Q1",
+                        "evidence_profile": "statistical",
                         "problem_structure": {
                             "target": "estimate demand",
                             "data": "hourly counts",
@@ -603,9 +666,13 @@ class WorkflowTests(unittest.TestCase):
                         "post_fit_evidence": [
                             {
                                 "model_id": "baseline",
-                                "metric_summary": "holdout MAE recorded",
-                                "diagnostic_summary": "residual seasonality checked",
-                                "robustness_summary": "stable across time blocks",
+                                "result_summary": "blocked holdout error is stable across time blocks",
+                                "verification_checks": [
+                                    {"check_type": "assumptions", "status": "pass", "summary": "seasonality and dependence checked"},
+                                    {"check_type": "residual_or_fit", "status": "pass", "summary": "residual seasonality checked"},
+                                    {"check_type": "uncertainty", "status": "pass", "summary": "forecast uncertainty quantified"},
+                                    {"check_type": "out_of_sample", "status": "pass", "summary": "blocked holdout MAE recorded"},
+                                ],
                                 **evidence,
                             }
                         ],
@@ -621,22 +688,362 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(report["status"], "pass", report["errors"])
             self.assertTrue(any("baseline" in item for item in report["warnings"]))
 
+    def test_deterministic_optimization_profile_does_not_require_statistical_prose(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            evidence = self.make_artifact(root, "synthesis/evidence/q1-optimization.txt", "feasible optimum verified\n")
+            document = {
+                "schema_version": 2,
+                "status": "frozen",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "evidence_profile": "optimization",
+                        "problem_structure": {
+                            "target": "minimize deterministic transport cost",
+                            "data": "fixed network and demand",
+                            "constraints": "flow conservation and capacity",
+                            "validation_anchor": "exact small instances and independent feasibility check",
+                        },
+                        "candidates": [
+                            {
+                                "model_id": "min_cost_flow",
+                                "role": "strong_baseline",
+                                "pre_fit_rationale": "the constraints have network-flow structure",
+                                "complexity_level": "low",
+                            }
+                        ],
+                        "strong_baseline_id": "min_cost_flow",
+                        "post_fit_evidence": [
+                            {
+                                "model_id": "min_cost_flow",
+                                "result_summary": "the returned solution is feasible and matches exact small cases",
+                                "verification_checks": [
+                                    {"check_type": "feasibility", "status": "pass", "summary": "all constraints verified independently"},
+                                    {"check_type": "boundary", "status": "pass", "summary": "zero and saturated demand cases verified"},
+                                    {"check_type": "optimality_or_search", "status": "pass", "summary": "exact small cases and solver bound agree"},
+                                    {"check_type": "sensitivity", "status": "pass", "summary": "capacity perturbations preserve the decision regime"},
+                                ],
+                                **evidence,
+                            }
+                        ],
+                        "selected_model_id": "min_cost_flow",
+                        "selection_rationale": "the simple exact formulation already answers the question",
+                        "complexity_tradeoff": "additional predictors do not address a verified failure",
+                        "rejected_models": [],
+                    }
+                ],
+            }
+            (root / "synthesis" / "model_selection.json").write_text(json.dumps(document), encoding="utf-8")
+            report = validate_model_selection(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
+
+    def test_draft_model_selection_defers_final_rejection_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            document = {
+                "schema_version": 2,
+                "status": "draft",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "evidence_profile": "analytical",
+                        "problem_structure": {
+                            "target": "derive the boundary",
+                            "data": "fixed geometry",
+                            "constraints": "finite domains",
+                            "validation_anchor": "special cases",
+                        },
+                        "candidates": [{"model_id": "direct", "pre_fit_rationale": "matches the geometry"}],
+                        "strong_baseline_id": "direct",
+                        "post_fit_evidence": [],
+                        "selected_model_id": "",
+                        "selection_rationale": "",
+                        "complexity_tradeoff": "",
+                        "rejected_models": [],
+                    }
+                ],
+            }
+            (root / "synthesis" / "model_selection.json").write_text(json.dumps(document), encoding="utf-8")
+            report = validate_model_selection(root)
+            self.assertEqual(report["status"], "block")
+            self.assertEqual(report["errors"], ["model selection is not frozen"])
+            self.assertFalse(any("rejected candidates" in item for item in report["errors"]))
+
+    def test_review_router_is_conditional_but_never_skips_implementation_check(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            implementation = self.make_artifact(root, "audits/implementation/q1.txt", "equations and code domains agree\n")
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "optimization"}]}),
+                encoding="utf-8",
+            )
+            reviews = {
+                kind: {"status": "required", "rationale": "required review"}
+                for kind in ("scientific", "implementation", "uncertainty", "claims")
+            }
+            reviews["statistical"] = {
+                "status": "not_applicable",
+                "rationale": "the inputs and optimization are deterministic; uncertainty is handled by sensitivity analysis",
+            }
+            route = {
+                "schema_version": 1,
+                "status": "routed",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "evidence_profile": "optimization",
+                        "reviews": reviews,
+                        "uncertainty_focus": ["parameter_sensitivity", "numerical_solver"],
+                        "implementation_assumption_check": {
+                            "status": "pass",
+                            "summary": "domains, endpoints, constraints and tolerances match the mathematical definition",
+                            **implementation,
+                        },
+                    }
+                ],
+            }
+            (root / "synthesis" / "review_route.json").write_text(json.dumps(route), encoding="utf-8")
+            self.assertEqual(validate_review_route(root)["status"], "pass")
+
+            route["questions"][0]["evidence_profile"] = "statistical"
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "statistical"}]}),
+                encoding="utf-8",
+            )
+            (root / "synthesis" / "review_route.json").write_text(json.dumps(route), encoding="utf-8")
+            report = validate_review_route(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("statistical review is required" in item for item in report["errors"]))
+
+    def test_draft_review_route_allows_pending_implementation_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "analytical"}]}),
+                encoding="utf-8",
+            )
+            reviews = {
+                kind: {"status": "required", "rationale": "planned independent review"}
+                for kind in ("scientific", "implementation", "uncertainty", "claims")
+            }
+            reviews["statistical"] = {"status": "not_applicable", "rationale": "fixed analytical inputs"}
+            route = {
+                "schema_version": 1,
+                "status": "draft",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "evidence_profile": "analytical",
+                        "reviews": reviews,
+                        "uncertainty_focus": ["model_form"],
+                        "implementation_assumption_check": {
+                            "status": "pending",
+                            "summary": "endpoint and domain checks are planned",
+                        },
+                    }
+                ],
+            }
+            (root / "synthesis" / "review_route.json").write_text(json.dumps(route), encoding="utf-8")
+            report = validate_review_route(root)
+            self.assertEqual(report["errors"], ["review routing is not complete"])
+
+    def test_draft_paper_payload_defers_final_content_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 2, "status": "draft", "questions": [{"question_id": "Q1", "evidence_profile": "analytical"}]}),
+                encoding="utf-8",
+            )
+            payload = {
+                "schema_version": 1,
+                "status": "draft",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "evidence_profile": "analytical",
+                        "problem_summary": "",
+                        "assumptions": [],
+                        "core_model": "",
+                        "derivation_summary": "",
+                        "algorithm_summary": "",
+                        "key_results": [],
+                        "comparison_summary": "",
+                        "validation_summary": "",
+                        "sensitivity_and_limits": "",
+                        "precision_policy": {"display_rule": "", "justification": "", "dominant_uncertainty": ""},
+                        "complexity_value": {
+                            "mode": "semantics_required",
+                            "added_complexity": "题意规定的边界条件",
+                            "structural_need": "保持题意完整",
+                            "incremental_gain": None,
+                            "decision": "保留",
+                        },
+                        "paper_section": "paper/sections/questions/q01.tex",
+                        "figures": [],
+                        "citations": [],
+                    }
+                ],
+            }
+            (root / "synthesis" / "paper_payload.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            report = validate_paper_presentation(root)
+            self.assertEqual(
+                report["errors"],
+                ["paper payload is not ready", "paper payload requires frozen model_selection.json schema v2"],
+            )
+
+    def test_paper_presentation_firewall_accepts_contest_prose_and_blocks_control_prose(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            section = root / "paper" / "sections" / "questions" / "q01.tex"
+            section.write_text("\\section{问题一}\\n由守恒关系建立最小费用流模型，并在边界情形下验证可行性。\\n", encoding="utf-8")
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "optimization"}]}), encoding="utf-8"
+            )
+            payload = {
+                "schema_version": 1,
+                "status": "ready",
+                "questions": [
+                    {
+                        "question_id": "Q1",
+                        "evidence_profile": "optimization",
+                        "problem_summary": "在容量约束下确定最低成本的运输方案",
+                        "core_model": "最小费用流",
+                        "derivation_summary": "由节点流量守恒和弧容量得到线性约束",
+                        "algorithm_summary": "使用确定性网络流求解器并复核约束",
+                        "comparison_summary": "与直接枚举的小规模算例结果一致",
+                        "validation_summary": "可行性、最优界和边界情形均通过检查",
+                        "sensitivity_and_limits": "容量扰动下策略稳定，结论依赖网络成本定义",
+                        "paper_section": "paper/sections/questions/q01.tex",
+                        "key_results": ["所得方案满足全部守恒与容量约束"],
+                        "assumptions": ["运输成本在研究时段内保持不变"],
+                        "precision_policy": {
+                            "display_rule": "成本保留到输入数据支持的两位小数",
+                            "justification": "更高位数不改变方案排序",
+                            "dominant_uncertainty": "成本参数的测量精度",
+                        },
+                        "complexity_value": {
+                            "mode": "no_extra_complexity",
+                            "added_complexity": "未增加额外模型组件",
+                            "structural_need": "网络流结构直接对应守恒与容量约束",
+                            "incremental_gain": None,
+                            "decision": "保留最小费用流模型",
+                        },
+                        "figures": [],
+                    }
+                ],
+            }
+            (root / "synthesis" / "paper_payload.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+            self.assertEqual(validate_paper_presentation(root)["status"], "pass")
+            payload["questions"][0]["review_type"] = "implementation"
+            (root / "synthesis" / "paper_payload.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+            self.assertEqual(validate_paper_presentation(root)["status"], "block")
+            del payload["questions"][0]["review_type"]
+            (root / "synthesis" / "paper_payload.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+            section.write_text("\\section{问题一}\\nQ1验收后冻结，并作为下游接口。\\n", encoding="utf-8")
+            report = validate_paper_presentation(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("leaked into final paper" in item for item in report["errors"]))
+
+    def test_faithful_formulation_claim_can_pass_without_baseline_failure_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            self.complete_single_claim(root)
+            semantic = self.make_artifact(root, "innovation/evidence/semantic.txt", "network distance preserves admissible paths\n")
+            claim_path = root / "innovation" / "claim_portfolio.csv"
+            with claim_path.open(encoding="utf-8-sig") as handle:
+                claims = list(csv.DictReader(handle))
+            claims[0].update(
+                {
+                    "reasoning_path": "faithful_formulation",
+                    "semantic_requirement": "distance must follow admissible network paths",
+                    "faithfulness_argument": "network shortest-path distance preserves the feasible movement semantics",
+                    "simplified_benchmark": "Euclidean distance baseline",
+                    "faithfulness_evidence_artifact": semantic["artifact_path"],
+                    "faithfulness_evidence_sha256": semantic["sha256"],
+                    "faithfulness_check": semantic["command_or_check"],
+                    "faithfulness_checked_at": semantic["checked_at"],
+                }
+            )
+            self.write_csv_rows(claim_path, claims)
+            experiment_path = root / "innovation" / "claim_experiments.csv"
+            with experiment_path.open(encoding="utf-8-sig") as handle:
+                experiments = list(csv.DictReader(handle))
+            experiments.append(
+                {
+                    "claim_id": "C1",
+                    "experiment_id": "E2",
+                    "test_type": "semantic_fidelity",
+                    "component": "network distance",
+                    "hypothesis": "the formulation excludes physically inadmissible shortcuts",
+                    "baseline": "Euclidean distance",
+                    "dataset_or_fixture": "network with a blocked crossing",
+                    "command": "python verify_claim.py --claim C1 --semantic",
+                    "seed": "deterministic",
+                    "metric": "inadmissible shortcut count",
+                    "baseline_value": "1",
+                    "changed_value": "0",
+                    "artifact_path": semantic["artifact_path"],
+                    "sha256": semantic["sha256"],
+                    "checked_at": semantic["checked_at"],
+                    "status": "verified",
+                    "reviewer": "semantic-reviewer",
+                    "decision": "pass",
+                    "notes": "faithful formulation check",
+                }
+            )
+            self.write_csv_rows(experiment_path, experiments)
+            report = validate_innovation_portfolio(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
+
     def test_scientific_review_blocks_unresolved_critical_finding(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
             evidence = self.make_artifact(root, "audits/review/critical.txt", "leakage found in split\n")
+            (root / "synthesis" / "review_route.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "status": "routed",
+                        "questions": [
+                            {
+                                "question_id": "Q1",
+                                "reviews": {
+                                    kind: {"status": "required", "rationale": "independently checked"}
+                                    for kind in ("scientific", "implementation", "statistical", "uncertainty", "claims")
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             document = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "reviewed",
                 "policy": {"max_open_major": 1},
                 "coverage": [
-                    {"review_type": kind, "status": "pass", "rationale": "independently checked"}
-                    for kind in ("scientific", "statistical", "claims")
+                    {"question_id": "Q1", "review_type": kind, "status": "pass", "rationale": "independently checked"}
+                    for kind in ("scientific", "implementation", "statistical", "uncertainty", "claims")
                 ],
                 "findings": [
                     {
                         "finding_id": "F1",
+                        "question_id": "Q1",
                         "review_type": "statistical",
                         "severity": "critical",
                         "summary": "time leakage invalidates validation",
@@ -663,6 +1070,10 @@ class WorkflowTests(unittest.TestCase):
                         "baseline_gain_coverage": 1.0,
                         "reproducibility_rate": 1.0,
                         "paper_mapping_rate": 0.5,
+                        "paper_meta_language_rate": 0.0,
+                        "adaptive_review_accuracy": 1.0,
+                        "implementation_gap_detection_rate": 1.0,
+                        "presentation_blind_score": 4.0,
                         "blind_quality_score": 4.0,
                     },
                     {
@@ -672,6 +1083,10 @@ class WorkflowTests(unittest.TestCase):
                         "baseline_gain_coverage": 0.5,
                         "reproducibility_rate": 1.0,
                         "paper_mapping_rate": 1.0,
+                        "paper_meta_language_rate": 0.0,
+                        "adaptive_review_accuracy": 1.0,
+                        "implementation_gap_detection_rate": 0.5,
+                        "presentation_blind_score": 5.0,
                         "blind_quality_score": 5.0,
                     },
                 ]

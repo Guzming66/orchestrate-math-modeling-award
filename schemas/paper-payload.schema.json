@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v1.schema.json",
+  "title": "Sanitized contest-paper scientific payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "questions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["draft", "ready"]},
+    "notes": {"type": "string"},
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question_id", "evidence_profile", "problem_summary", "assumptions", "core_model",
+          "derivation_summary", "key_results", "validation_summary", "sensitivity_and_limits",
+          "precision_policy", "complexity_value", "paper_section", "figures"
+        ],
+        "properties": {
+          "question_id": {"type": "string", "minLength": 1},
+          "evidence_profile": {
+            "enum": ["analytical", "deterministic_numerical", "optimization", "statistical", "simulation", "machine_learning"]
+          },
+          "problem_summary": {"type": "string", "minLength": 1},
+          "assumptions": {"type": "array", "items": {"type": "string"}},
+          "core_model": {"type": "string", "minLength": 1},
+          "derivation_summary": {"type": "string", "minLength": 1},
+          "algorithm_summary": {"type": "string"},
+          "key_results": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "comparison_summary": {"type": "string"},
+          "validation_summary": {"type": "string"},
+          "sensitivity_and_limits": {"type": "string"},
+          "precision_policy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["display_rule", "justification", "dominant_uncertainty"],
+            "properties": {
+              "display_rule": {"type": "string"},
+              "justification": {"type": "string"},
+              "dominant_uncertainty": {"type": "string"}
+            }
+          },
+          "complexity_value": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode", "added_complexity", "structural_need", "incremental_gain", "decision"],
+            "properties": {
+              "mode": {"enum": ["no_extra_complexity", "semantics_required", "incremental_change"]},
+              "added_complexity": {"type": "string", "minLength": 1},
+              "structural_need": {"type": "string", "minLength": 1},
+              "incremental_gain": {"type": ["string", "null"]},
+              "decision": {"type": "string", "minLength": 1}
+            },
+            "allOf": [
+              {
+                "if": {"properties": {"mode": {"const": "incremental_change"}}, "required": ["mode"]},
+                "then": {"properties": {"incremental_gain": {"type": "string", "minLength": 1}}}
+              }
+            ]
+          },
+          "paper_section": {"type": "string", "minLength": 1},
+          "figures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "role", "supported_claim", "source_data", "generator"],
+              "properties": {
+                "path": {"type": "string", "minLength": 1},
+                "role": {"enum": ["mechanism", "data", "diagnostic", "decision"]},
+                "supported_claim": {"type": "string", "minLength": 1},
+                "source_data": {"type": "string", "minLength": 1},
+                "generator": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          "citations": {"type": "array", "items": {"type": "string"}}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"evidence_profile": {"not": {"const": "analytical"}}}},
+            "then": {"required": ["algorithm_summary"], "properties": {"algorithm_summary": {"minLength": 1}}}
+          }
+        ]
+      }
+    }
+  }
+}

@@ -23,8 +23,10 @@ from validate_competition_profile import load_profile, validate_competition_prof
 from validate_innovation_portfolio import validate_innovation_portfolio
 from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
+from validate_paper_presentation import validate_paper_presentation
 from validate_paper_question_coverage import validate_paper_question_coverage
 from validate_review_findings import validate_review_findings
+from validate_review_route import validate_review_route
 from validate_task_board import validate_task_board
 
 
@@ -491,6 +493,14 @@ def finalize(workspace: Path) -> dict[str, object]:
     errors.extend(str(item) for item in model_selection_report.get("errors", []))
     warnings.extend(str(item) for item in model_selection_report.get("warnings", []))
 
+    review_route_report = validate_review_route(workspace)
+    errors.extend(str(item) for item in review_route_report.get("errors", []))
+    warnings.extend(str(item) for item in review_route_report.get("warnings", []))
+
+    paper_presentation_report = validate_paper_presentation(workspace)
+    errors.extend(str(item) for item in paper_presentation_report.get("errors", []))
+    warnings.extend(str(item) for item in paper_presentation_report.get("warnings", []))
+
     paper_question_report: dict[str, object] = {"status": "not_applicable"}
     if competition == "CUMCM":
         paper_question_report = validate_paper_question_coverage(workspace)
@@ -595,6 +605,8 @@ def finalize(workspace: Path) -> dict[str, object]:
         "innovation_status": innovation_report.get("status"),
         "paper_innovation_status": paper_innovation_report.get("status"),
         "model_selection_status": model_selection_report.get("status"),
+        "review_route_status": review_route_report.get("status"),
+        "paper_presentation_status": paper_presentation_report.get("status"),
         "paper_question_coverage_status": paper_question_report.get("status"),
         "review_status": review_report.get("status"),
         "citation_validator_output": citation_output[-4000:],

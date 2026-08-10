@@ -9,14 +9,16 @@
 5. Innovation Claim Engine 独立任务
 6. 独立建模分支
 7. 数据审计
-8. 统计审计
-9. 不确定性与量纲审计
-10. 独立复现
-11. 展示论文标杆审计
-12. 红队评委
-13. 摘要 30 秒盲审
-14. 论文总编
-15. LaTeX 与提交包审计
+8. 自适应审查路由
+9. 统计审计
+10. 不确定性与量纲审计
+11. 独立复现
+12. 展示论文标杆审计
+13. 红队评委
+14. 摘要 30 秒盲审
+15. 论文总编
+16. 科研制图审计
+17. LaTeX 与提交包审计
 
 ## 所有任务的共同规则
 
@@ -55,7 +57,9 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 完整读取 [innovation-engine.md](innovation-engine.md)，按 Wave 1–4 分配 Structure Mapper、Strong Baseline Builder、Baseline Failure Mapper、axis scouts、可选 Cross-domain Analogist、Literature Auditor、Experimenter、Critic 和 Jury。每个任务只写负责的 artifact；冻结前不读取其他 scout 或主任务偏好。
 
-所有晋级 claim 必须形成 `Structure → Baseline Failure → Minimal Change → Gain → Nearest Precedent/Difference`。Literature Auditor 使用 `$citation-management`；Experimenter 保存 falsification、改变开/关 ablation、命令、种子、artifact 和哈希；Critic/Jury 不得由主张作者兼任。候选数、axis、scout、类比和 safe/stretch 不作硬门禁。
+所有晋级 claim 必须先声明路径：`Problem Semantics → Faithful Formulation → Verification → Simplified Benchmark`，或 `Structure → Baseline Failure → Minimal Change → Gain`；两条路径都要连接最近先例、差异和论文落点。Literature Auditor 使用 `$citation-management`；Experimenter 保存 semantic-fidelity/falsification、改变开/关 ablation、命令、种子、artifact 和哈希；Critic/Jury 不得由主张作者兼任。候选数、axis、scout、类比和 safe/stretch 不作硬门禁。
+
+Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强制前置任务。若没有足以晋级的 claim，记录“无晋级主张”即可；只有实际晋级的 claim 才要求完整支路闭合。
 
 ## 独立建模分支
 
@@ -78,9 +82,15 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 检查来源、授权、时间范围、抽样机制、字段含义、单位、重复、缺失、异常、类别失衡、数据泄漏、训练测试污染和外部数据与原题口径差异。逐文件更新 `audits/data/data_provenance.csv` 的来源、条款和 SHA-256；输出修复建议和修复前后影响，不静默删除数据。
 
+## 自适应审查路由
+
+任务说明：完整读取 `adaptive-review-and-evidence.md`，按每个小题的 Evidence Profile 填写 `synthesis/review_route.json`。Scientific、implementation、uncertainty 和 claims 始终 required；statistics 只在随机数据、抽样、估计、预测、分布主张、机器学习或随机模拟中 required。确定性题标记 not_applicable 时只写内部理由，不为论文生成“不适用”段落。
+
+每问完成 implementation-assumption check：逐项核对数学定义与代码的定义域、端点、消元、离散、边界搜索、约束实现、停止准则和算法参数。保存真实 artifact 与哈希。
+
 ## 统计审计
 
-任务说明：使用 `$statistical-analysis` 审核指定分支，不为原作者辩护。
+任务说明：仅当 Review Router 标记 required 时使用 `$statistical-analysis` 审核指定分支，不为原作者辩护。
 
 检查样本量、独立性、分布或残差假设、变量选择、共线性、多重比较、效应量、置信/可信区间、交叉验证设计、过拟合和结论措辞。区分统计显著与实际意义。
 
@@ -88,7 +98,7 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 任务说明：使用 `$uncertainty-and-units` 审核所有关键输入和输出。
 
-检查量纲闭合、单位换算、测量误差、参数区间、情景边界、误差传播和结果排序的稳定性。优先报告会改变结论方向或排名的不确定性。
+检查量纲闭合、单位换算、求解器误差、测量误差、模型形式、参数区间、情景边界、误差传播和结果排序的稳定性。优先报告会改变结论方向、排名或正文显示精度的不确定性；非材料性机器精度只留在内部。
 
 ## 独立复现
 
@@ -106,7 +116,7 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 任务说明：使用 `$scientific-critical-thinking`，以严格评委视角寻找足以降低奖级的问题。
 
-优先攻击题意偏差、不可识别参数、循环论证、因果过度、外推失效、验证泄漏、伪精确、缺少基线和“结论先行”。每项批评必须引用具体产物并给出可验证的修复条件。
+优先攻击题意偏差、数学定义与代码实现错位、不可识别参数、循环论证、因果过度、外推失效、验证泄漏、伪精确、缺少基准比较和“结论先行”。每项批评必须引用具体产物并给出可验证的修复条件。
 
 ## 摘要 30 秒盲审
 
@@ -118,18 +128,18 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 任务说明：只使用通过门禁的结果，不重新计算或发明数字。
 
-建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 映射到 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX。
+先完整读取 `paper-presentation-engine.md`，从通过模型门禁的结果生成 `synthesis/paper_payload.json`。论文手以该 Payload 为主要科学输入，不从 audit prose 复制句子。建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 按其 reasoning path 映射到 semantic requirement 或 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX。
 
 ## 科研制图审计
 
-任务说明：如已安装则使用 `$scientific-visualization`；否则按 `cumcm-paper-writing-and-figures.md` 直接审计，不改变数据或模型结果。
+任务说明：如已安装则使用 `$data-analytics:visualize-data`；否则按 `cumcm-paper-writing-and-figures.md` 的同一图表契约直接审计，不改变数据或模型结果。
 
-逐图记录论点职责、源数据、变换、脚本、随机种子、单位、区间定义、输出路径和哈希。检查坐标尺度、缺失值、平滑/归一化、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/PNG 放入 `paper/figures/`。
+逐图记录论点职责、源数据、变换、脚本、随机种子、单位、区间定义、输出路径和哈希。检查坐标尺度、缺失值、平滑/归一化、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出；全局尺度压缩关键结构时改用局部放大、inset 或相对坐标。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/PNG 放入 `paper/figures/`。
 
 ## LaTeX 与提交包审计
 
 任务说明：不修改论证，只检查 LaTeX 工程和最终 PDF。
 
-先运行 `validate_paper_question_coverage.py`，确认每个冻结小题恰有一个已载入且非空的 LaTeX 文件。再从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
+先运行 `validate_paper_presentation.py` 和 `validate_paper_question_coverage.py`，确认 Payload 与冻结小题一致、正文没有内部元语言且每问恰有一个已载入的非空 LaTeX 文件。再从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
 
 按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有模型选择、创新主张、科学审查、论文、profile 要求的支撑包、所有哈希和匿名/凭据扫描同时通过才允许放行。

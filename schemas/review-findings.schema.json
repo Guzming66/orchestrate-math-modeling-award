@@ -1,14 +1,67 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/orchestrate-math-modeling/review-findings-v1.schema.json",
-  "title": "Independent scientific review findings",
+  "$id": "https://example.invalid/orchestrate-math-modeling/review-findings-v2.schema.json",
+  "title": "Routed independent review findings",
   "type": "object",
   "required": ["schema_version", "status", "policy", "coverage", "findings"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "status": {"enum": ["not_reviewed", "reviewed"]},
-    "policy": {"type": "object"},
-    "coverage": {"type": "array"},
-    "findings": {"type": "array"}
+    "policy": {
+      "type": "object",
+      "required": ["max_open_major"],
+      "properties": {"max_open_major": {"type": "integer", "minimum": 0}}
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["question_id", "review_type", "status", "rationale"],
+        "properties": {
+          "question_id": {"type": "string", "minLength": 1},
+          "review_type": {"enum": ["scientific", "implementation", "statistical", "uncertainty", "claims"]},
+          "status": {"enum": ["pass", "not_applicable"]},
+          "rationale": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "finding_id", "question_id", "review_type", "severity", "summary",
+          "affected_claim_or_result", "status", "resolution"
+        ],
+        "properties": {
+          "finding_id": {"type": "string", "minLength": 1},
+          "question_id": {"type": "string", "minLength": 1},
+          "review_type": {"enum": ["scientific", "implementation", "statistical", "uncertainty", "claims"]},
+          "severity": {"enum": ["critical", "major", "minor", "suggestion"]},
+          "summary": {"type": "string", "minLength": 1},
+          "affected_claim_or_result": {"type": "string", "minLength": 1},
+          "status": {"enum": ["open", "closed", "accepted_risk"]},
+          "resolution": {"type": "string", "minLength": 1},
+          "artifact_path": {"type": "string"},
+          "sha256": {"type": "string"},
+          "command_or_check": {"type": "string"},
+          "checked_at": {"type": "string"}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"severity": {"enum": ["critical", "major"]}}, "required": ["severity"]},
+            "then": {
+              "required": ["artifact_path", "sha256", "command_or_check", "checked_at"],
+              "properties": {
+                "artifact_path": {"minLength": 1},
+                "sha256": {"pattern": "^[0-9a-fA-F]{64}$"},
+                "command_or_check": {"minLength": 1},
+                "checked_at": {"minLength": 1}
+              }
+            }
+          }
+        ]
+      }
+    }
   }
 }

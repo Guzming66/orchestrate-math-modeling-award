@@ -70,7 +70,7 @@ def validate_experiment(workspace: Path, row: dict[str, str], known_claims: set[
     )
     if row.get("claim_id", "").strip() not in known_claims:
         errors.append(f"{experiment_id}: experiment references unknown claim")
-    if row.get("test_type", "").strip().lower() not in {"baseline_failure", "falsification", "ablation", "robustness"}:
+    if row.get("test_type", "").strip().lower() not in {"baseline_failure", "semantic_fidelity", "falsification", "ablation", "robustness"}:
         errors.append(f"{experiment_id}: invalid test_type")
     if row.get("decision", "").strip().lower() not in {"pass", "fail", "inconclusive"}:
         errors.append(f"{experiment_id}: invalid decision")
@@ -200,10 +200,9 @@ def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
     for row in findings:
         findings_by_claim.setdefault(row.get("claim_id", "").strip(), []).append(row)
 
-    claim_fields = (
-        "claim_id", "subproblem", "innovation_axis", "problem_structure", "baseline",
-        "baseline_failure", "failure_evidence_artifact", "failure_evidence_sha256",
-        "failure_check", "failure_checked_at", "proposed_change", "change_targets_failure",
+    common_claim_fields = (
+        "claim_id", "subproblem", "innovation_axis", "problem_structure", "reasoning_path",
+        "proposed_change",
         "mathematical_expression", "why_this_change", "minimality_argument", "extra_complexity",
         "extra_complexity_justified", "nearest_precedent", "difference_from_precedent",
         "expected_effect", "falsification_test", "ablation_required", "complexity_cost",
@@ -211,22 +210,60 @@ def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
     )
     for claim_id in sorted(promoted_ids):
         claim = by_claim[claim_id]
-        errors.extend(required(claim, claim_fields, claim_id))
+        errors.extend(required(claim, common_claim_fields, claim_id))
         if claim.get("status", "").strip().lower() != "supported":
             errors.append(f"{claim_id}: promoted claim is not marked supported")
-        if not is_true(claim.get("change_targets_failure", "")):
-            errors.append(f"{claim_id}: proposed change is not explicitly linked to the baseline failure")
-        errors.extend(
-            artifact_errors(
-                workspace,
-                claim,
-                f"{claim_id} baseline failure",
-                path_field="failure_evidence_artifact",
-                sha_field="failure_evidence_sha256",
-                check_field="failure_check",
-                time_field="failure_checked_at",
+        reasoning_path = claim.get("reasoning_path", "").strip().lower()
+        if reasoning_path not in {"failure_driven", "faithful_formulation"}:
+            errors.append(f"{claim_id}: reasoning_path must be failure_driven or faithful_formulation")
+        elif reasoning_path == "failure_driven":
+            errors.extend(
+                required(
+                    claim,
+                    (
+                        "baseline", "baseline_failure", "failure_evidence_artifact",
+                        "failure_evidence_sha256", "failure_check", "failure_checked_at",
+                        "change_targets_failure",
+                    ),
+                    claim_id,
+                )
             )
-        )
+            if not is_true(claim.get("change_targets_failure", "")):
+                errors.append(f"{claim_id}: proposed change is not explicitly linked to the baseline failure")
+            errors.extend(
+                artifact_errors(
+                    workspace,
+                    claim,
+                    f"{claim_id} baseline failure",
+                    path_field="failure_evidence_artifact",
+                    sha_field="failure_evidence_sha256",
+                    check_field="failure_check",
+                    time_field="failure_checked_at",
+                )
+            )
+        elif reasoning_path == "faithful_formulation":
+            errors.extend(
+                required(
+                    claim,
+                    (
+                        "semantic_requirement", "faithfulness_argument", "simplified_benchmark",
+                        "faithfulness_evidence_artifact", "faithfulness_evidence_sha256",
+                        "faithfulness_check", "faithfulness_checked_at",
+                    ),
+                    claim_id,
+                )
+            )
+            errors.extend(
+                artifact_errors(
+                    workspace,
+                    claim,
+                    f"{claim_id} semantic-fidelity evidence",
+                    path_field="faithfulness_evidence_artifact",
+                    sha_field="faithfulness_evidence_sha256",
+                    check_field="faithfulness_check",
+                    time_field="faithfulness_checked_at",
+                )
+            )
 
         extra_complexity = claim.get("extra_complexity", "").strip().lower()
         needs_ablation = is_true(claim.get("ablation_required", "")) or extra_complexity not in NONE_VALUES
@@ -240,6 +277,8 @@ def validate_innovation_portfolio(workspace: Path) -> dict[str, object]:
         test_types = {row.get("test_type", "").strip().lower() for row in claim_tests}
         if "falsification" not in test_types:
             errors.append(f"{claim_id}: no verified falsification test")
+        if reasoning_path == "faithful_formulation" and "semantic_fidelity" not in test_types:
+            errors.append(f"{claim_id}: faithful formulation requires a verified semantic_fidelity test")
         if needs_ablation and "ablation" not in test_types:
             errors.append(f"{claim_id}: complexity/fusion requires a verified ablation")
 

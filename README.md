@@ -1,49 +1,50 @@
 # 数学建模竞赛总控 Skill
 
-`orchestrate-math-modeling` 是面向 CUMCM/国赛和 MCM/ICM/美赛的证据驱动总控框架。它不承诺奖项，重点是让团队能够说明：为什么选这个模型、创新在哪里、结论凭什么成立、论文与提交规则是否真正通过。
+面向 CUMCM 国赛与 MCM/ICM 美赛的证据驱动总控。它协调逐问建模、创新主张、引用核验、复现、独立审查、LaTeX 写作和最终提交；不预测或保证奖项。
 
-## v9 的五个核心系统
+## v10 的六个核心系统
 
-- Competition Rule Engine：Profile v2 把每个硬规则绑定到当届官方来源、原文定位和本地快照哈希。
-- Model Selection Engine：按小题记录强基线、候选、拟合前理由、拟合后证据、最终选择和淘汰理由；简单模型可以胜出。
-- Innovation Claim Engine：只为已证明的 baseline failure 提出最小必要改变，并用先例、证伪、消融和论文落点支持。
-- Scientific Review Engine：统一进行科学、统计和主张审查，critical/major 必须有真实证据产物。
-- Submission Finalizer：不猜赛事规则，只执行 verified profile、验证状态、文件与哈希；CUMCM 还核对每个冻结小题与非空 LaTeX 章节一一对应，再直接构建 LaTeX。
+1. Rule Engine：只执行带生效时间、官方来源与哈希的赛事规则档案。
+2. Model Selection Engine：按小题选择 Evidence Profile，以强基线和可复核证据决定方案。
+3. Innovation Claim Engine：支持“忠实问题表述”和“基线失败—最小改变”两条创新路径。
+4. Scientific Review Engine：按题型路由科学、实现、统计、不确定性和主张审查。
+5. Contest Paper Presentation Engine：用 Paper Payload 隔离内部控制语言，管理正文、图表、精度与篇幅。
+6. Submission Finalizer：编译、渲染、交叉核对并按已核验规则执行 fail-closed 终审。
 
-工作流采用五个阶段：`rule_verification → exploration → model_freeze → paper_freeze → submission`。默认使用 `standard`；`championship` 加强独立审查与稳健性，但不强制增加模型或计算量。
+工作流采用五个阶段：`rule_verification → exploration → model_freeze → paper_freeze → submission`。默认使用 `standard`；`championship` 加强独立审查与稳健性，但不强制增加模型、统计段落或计算量。
 
 ## 配套 Skills
 
 必需：`mathmodel-skill`、`citation-management`。
 
-强烈建议：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`。
+按题目路由：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`。科研绘图使用 `data-analytics:visualize-data`；它负责定量图表设计与 QA，总控仍负责论文图表的证据、篇幅和 LaTeX 集成。七个 Skill 合作可以覆盖完整建模与论文流程，但仍需要参赛队员判断题意、核实当届规则、检查代码和数据、审阅引用、确认 AI 披露并完成正式提交。
 
-科研制图可选：`scientific-visualization`。推荐核验来源为 [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-visualization)；未安装时总控仍按内置的 CUMCM 图表规范工作，不把它设为硬依赖。
+## 安装
 
-这六个 Skill 可以覆盖完整建模与论文流程，但仍需要参赛队员做题意判断、核实当届官方规则、检查代码和数据、审阅引用、确认 AI 披露并完成正式提交。
+将本目录复制到 `$CODEX_HOME/skills/orchestrate-math-modeling`，或从 GitHub 仓库安装。安装后详细执行规则见 `SKILL.md`。仓库地址：<https://github.com/Guzming66/orchestrate-math-modeling>
 
 ## 快速开始
 
 ```text
-使用 $orchestrate-math-modeling 为这道国赛题建立总控工作区。先冻结三个小题的统一问题契约，再核验当届官方规则并生成带 source locator 和 hash 的 Competition Profile v2。每个小题先做强基线，只在真实失败证据支持时增加候选或创新改动；模型冻结后进行独立科学、统计和主张审查。论文只使用 LaTeX。
+使用 $orchestrate-math-modeling 为这道国赛题建立总控工作区。先核验当届官方规则并按小题冻结问题契约；为每问选择 Evidence Profile，建立最简单的充分方案，并在题意保真路径、基线失败最小改动或无创新主张之间作证据化裁决。完成实现一致性、适用的统计/不确定性审查后，只从 Paper Payload 写 LaTeX 论文并执行终审。
 ```
 
-安装后 Skill 的详细执行规则见 `SKILL.md`。仓库地址：<https://github.com/Guzming66/orchestrate-math-modeling>
+## 评估层级
 
-## 证据等级
+- E0：schema、迁移、门禁、Presentation Firewall 和 LaTeX/PDF 自动测试。
+- E1：历史赛题固定输入，对比有效创新主张、假创新率、复杂度、复现率、审查路由准确率、实现漏洞检出率和论文表达。
+- E2：不知道版本信息的独立评阅者盲评论文质量。
+- E3：多届真实赛事外部结果；只作观察，不能把获奖归因于本 Skill。
 
-- E0：实现通过本仓库自动化测试。当前覆盖 Profile v2 溯源、模型选择、创新最小性、科学审查、AI profile 驱动、迁移、溯源、匿名打包和 fail-closed 终审。
-- E1：在公开历史题上完成可复现的结构化演练。
-- E2：由不知道版本信息的独立评阅者比较论文质量。
-- E3：多届真实赛事外部结果；仅作观察，不能把获奖归因于本 Skill。
+基准分数不等于获奖概率，也不作为自动回归阈值。
 
-当前公开结论只到 E0。写作规范另由用户本地 2022–2025 年 47 篇/2379 页优秀论文语料作描述性结构校准，方法与聚合计数见 `references/cumcm-corpus-evidence-2022-2025.md`；原论文、OCR 文本和逐篇卡不随仓库分发。该语料校准不等同于 E1 解题演练，不输出获奖率，也不参与赛中终审。
+当前公开实现结论只到 E0。写作规范另由用户本地 2022–2025 年 47 篇/2379 页优秀论文语料作描述性结构校准，方法与聚合计数见 `references/cumcm-corpus-evidence-2022-2025.md`；原论文、OCR 文本和逐篇卡不随仓库分发。该语料校准不等同于 E1 解题演练。
 
 ## 设计底线
 
-- 创新不是模型数量或算法复杂度。
-- 融合模型本身没有创新信用。
-- 搜索宽度只告警，不阻断。
-- 规则、文献、数据、结果和 critical/major finding 必须有 artifact-backed evidence。
+- 创新不是模型数量或算法复杂度；融合本身没有创新信用。
+- 搜索宽度只告警，不阻断；简单而充分的方案可以胜出。
+- 规则、文献、数据、结果和重大审查发现必须由真实产物支持。
+- 内部证据保持完整，最终论文不暴露任务、冻结、哈希或审计元语言。
 - 最终论文以 LaTeX 为唯一真源，不做 Word/Markdown 格式转换。
-- `final_report.json=pass` 只表示本框架定义的技术门禁通过，不代表官方接受或获奖保证。
+- `final_report.json=pass` 只表示框架定义的技术门禁通过，不代表官方接受或获奖保证。

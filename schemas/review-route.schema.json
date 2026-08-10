@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/orchestrate-math-modeling/review-route-v1.schema.json",
+  "title": "Adaptive review routing",
+  "type": "object",
+  "required": ["schema_version", "status", "questions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["draft", "routed"]},
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["question_id", "evidence_profile", "reviews", "uncertainty_focus", "implementation_assumption_check"],
+        "properties": {
+          "question_id": {"type": "string", "minLength": 1},
+          "evidence_profile": {
+            "enum": ["analytical", "deterministic_numerical", "optimization", "statistical", "simulation", "machine_learning"]
+          },
+          "reviews": {
+            "type": "object",
+            "required": ["scientific", "implementation", "statistical", "uncertainty", "claims"],
+            "additionalProperties": false,
+            "properties": {
+              "scientific": {"$ref": "#/$defs/requiredDecision"},
+              "implementation": {"$ref": "#/$defs/requiredDecision"},
+              "statistical": {"$ref": "#/$defs/routeDecision"},
+              "uncertainty": {"$ref": "#/$defs/requiredDecision"},
+              "claims": {"$ref": "#/$defs/requiredDecision"}
+            }
+          },
+          "uncertainty_focus": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"enum": ["numerical_solver", "parameter_sensitivity", "model_form", "measurement", "stochastic"]}
+          },
+          "implementation_assumption_check": {"$ref": "#/$defs/implementationEvidence"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "routeDecision": {
+      "type": "object",
+      "required": ["status", "rationale"],
+      "properties": {
+        "status": {"enum": ["required", "not_applicable"]},
+        "rationale": {"type": "string"}
+      }
+    },
+    "requiredDecision": {
+      "type": "object",
+      "required": ["status", "rationale"],
+      "properties": {
+        "status": {"const": "required"},
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    },
+    "implementationEvidence": {
+      "type": "object",
+      "required": ["status", "summary"],
+      "properties": {
+        "status": {"enum": ["pending", "pass"]},
+        "summary": {"type": "string", "minLength": 1},
+        "artifact_path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+        "command_or_check": {"type": "string", "minLength": 1},
+        "checked_at": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "pass"}}, "required": ["status"]},
+          "then": {"required": ["artifact_path", "sha256", "command_or_check", "checked_at"]}
+        }
+      ]
+    }
+  }
+}

@@ -4,11 +4,13 @@
 
 1. `competition_manifest.json` 的 `workflow_stage` 已由队员明确改为 `submission`。
 2. `competition_profile.json` 为 v2 verified，所有 active requirement 都有官方 source binding。
-3. `model_selection.json` 对每个核心小题完成冻结。
-4. Innovation Claim Engine 与论文创新映射通过。
-5. `review_findings.json` 覆盖 scientific、statistical、claims；critical 已关闭，open major 不超 policy。
-6. 引用、输入、结果和复现台账全部指向实际 artifact 且 hash 匹配。
-7. 所有 blocking task 已完成或有明确、可审计的 waiver。
+3. schema v2 `model_selection.json` 对每个核心小题完成冻结，并通过对应 Evidence Profile。
+4. `review_route.json` 覆盖每问；implementation-assumption check 通过，统计审查未被错误跳过。
+5. Innovation Claim Engine 与论文创新映射通过。
+6. `paper_payload.json` 为 ready，和冻结小题一致，并通过 Presentation Firewall。
+7. schema v2 `review_findings.json` 覆盖 scientific、implementation、statistical、uncertainty、claims；critical 已关闭，open major 不超 policy。
+8. 引用、输入、结果和复现台账全部指向实际 artifact 且 hash 匹配。
+9. 所有 blocking task 已完成或有明确、可审计的 waiver。
 
 ## LaTeX 与额外产物
 

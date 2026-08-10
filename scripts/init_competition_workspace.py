@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 9
+WORKFLOW_VERSION = 10
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -214,6 +214,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "audits/red-team",
         "audits/latex",
         "audits/innovation",
+        "audits/implementation",
+        "audits/presentation",
         "audits/submission",
         "environment",
         "submission",
@@ -273,15 +275,27 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "- Structure gaps that may justify a minimal change:\n",
     )
     write_text_if_missing(
+        root / "innovation" / "strong_baseline.md",
+        "# Strong baseline\n\n"
+        "| subproblem | baseline | why structurally sufficient | assumptions | planned validation | evidence |\n"
+        "|---|---|---|---|---|---|\n",
+    )
+    write_text_if_missing(
         root / "innovation" / "baseline_failure_map.md",
         "# Baseline failure map\n\n"
-        "| subproblem | strong baseline | tested assumption | observed failure | artifact | minimal repair opportunity |\n"
+        "| subproblem | baseline_id | tested assumption | observed failure | artifact | minimal repair opportunity |\n"
+        "|---|---|---|---|---|---|\n",
+    )
+    write_text_if_missing(
+        root / "innovation" / "semantic_fidelity_map.md",
+        "# Semantic fidelity map\n\n"
+        "| subproblem | explicit problem semantics | faithful mathematical object | hidden simplification to avoid | simplified benchmark | verification artifact |\n"
         "|---|---|---|---|---|---|\n",
     )
     write_text_if_missing(
         root / "innovation" / "opportunity_map.md",
         "# Innovation opportunity map\n\n"
-        "Map each verified baseline failure to the smallest plausible change across formulation, representation, mechanism, decomposition, objective/constraint, inference, solution, data, validation, decision explanation, or model structure. Cross-domain analogy is optional.\n",
+        "Use either path A (problem semantics -> faithful formulation -> simplified benchmark) or path B (verified baseline failure -> minimal necessary change). Map only necessary changes across formulation, representation, mechanism, decomposition, objective/constraint, inference, solution, data, validation, decision explanation, or model structure. Cross-domain analogy is optional.\n",
     )
     write_text_if_missing(
         root / "innovation" / "jury_rationale.md",
@@ -292,8 +306,11 @@ def create_workspace(args: argparse.Namespace) -> Path:
     innovation_headers = {
         "claim_portfolio.csv": [
             "claim_id", "subproblem", "scout_id", "innovation_axis", "problem_structure",
+            "reasoning_path", "semantic_requirement", "faithfulness_argument", "simplified_benchmark",
             "baseline", "baseline_failure", "failure_evidence_artifact", "failure_evidence_sha256",
             "failure_check", "failure_checked_at", "proposed_change", "change_targets_failure",
+            "faithfulness_evidence_artifact", "faithfulness_evidence_sha256",
+            "faithfulness_check", "faithfulness_checked_at",
             "mathematical_expression", "why_this_change", "minimality_argument", "extra_complexity",
             "extra_complexity_justified", "nearest_precedent", "difference_from_precedent",
             "expected_effect", "falsification_test", "ablation_required", "complexity_cost",
@@ -377,22 +394,37 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_json_if_missing(
         root / "synthesis" / "model_selection.json",
         {
+            "schema_version": 2,
+            "status": "draft",
+            "questions": [],
+            "notes": "Record one decision and one adaptive evidence_profile per core question. A strong baseline may remain selected when alternatives add no validated value.",
+        },
+    )
+    write_json_if_missing(
+        root / "synthesis" / "review_route.json",
+        {
             "schema_version": 1,
             "status": "draft",
             "questions": [],
-            "notes": "Record one decision per core question. A strong baseline may remain selected when alternatives add no validated value.",
+            "notes": "Route review by evidence profile. Statistical not_applicable is internal and must not create paper prose.",
+        },
+    )
+    write_json_if_missing(
+        root / "synthesis" / "paper_payload.json",
+        {
+            "schema_version": 1,
+            "status": "draft",
+            "questions": [],
+            "notes": "Use only contest-native mathematical content when this payload becomes ready.",
         },
     )
     write_json_if_missing(
         root / "audits" / "review_findings.json",
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "not_reviewed",
             "policy": {"max_open_major": 0 if args.innovation_mode == "championship" else 1},
-            "coverage": [
-                {"review_type": review_type, "status": "pending", "rationale": ""}
-                for review_type in ("scientific", "statistical", "claims")
-            ],
+            "coverage": [],
             "findings": [],
         },
     )
@@ -512,7 +544,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_csv_header_if_missing(
         root / "synthesis" / "innovation_claims.csv",
         [
-            "claim_id", "claim_sentence", "problem_structure", "baseline_failure", "method_change",
+            "claim_id", "claim_sentence", "problem_structure", "reasoning_path",
+            "semantic_requirement", "baseline_failure", "method_change",
             "evidence_result_ids", "novelty_source_keys", "paper_section", "paper_anchor",
             "figure_or_table", "claim_strength", "status", "artifact_path", "sha256",
             "command_or_check", "checked_at", "reviewer", "notes",
@@ -533,26 +566,30 @@ def create_workspace(args: argparse.Namespace) -> Path:
         task_rows = [
             ["profile-audit", "all", "rules", "", "", "compliance/competition_profile.json", "", "", "stop until an official source-backed profile is verified", "pending", "true", "versioned profile and source snapshots", ""],
             ["problem-route", "all", "routing", "", "", "shared/problem_route.md", "", "", "unverified exploratory structure only until profile passes", "pending", "true", "frozen problem route", ""],
-            ["strong-baseline", "all", "baseline", "problem-route", "", "innovation/baseline_failure_map.md", "", "", "simplest defensible baseline", "pending", "true", "baseline definition and assumption tests", ""],
+            ["semantic-mapper", "all", "semantics", "problem-route", "", "innovation/semantic_fidelity_map.md", "", "", "preserve the mathematical object explicitly required by the problem", "pending", "true", "semantic requirements and simplified benchmark", ""],
+            ["strong-baseline", "all", "baseline", "problem-route", "", "innovation/strong_baseline.md", "", "", "simplest defensible baseline", "pending", "true", "baseline definition and planned validation", ""],
             ["baseline-failure", "all", "diagnostic", "strong-baseline", "", "innovation/baseline_failure_map.md", "", "", "report no innovation if no material failure exists", "pending", "true", "artifact-backed failure map", ""],
-            ["innovation-discovery", "all", "innovation", "baseline-failure", "", "innovation/claim_portfolio.csv", "", "", "minimal repair or no claim", "pending", "true", "innovation claim portfolio and opportunity map", ""],
-            ["innovation-evidence", "all", "experiment", "innovation-discovery;profile-audit", "", "innovation/claim_experiments.csv", "", "", "do not promote while rules are unverified", "pending", "true", "nearest-precedent, falsification and ablation evidence", ""],
-            ["innovation-critic", "all", "red-team", "innovation-evidence", "", "innovation/critic_findings.csv", "", "", "reject unsupported complexity", "pending", "true", "blind critic findings", ""],
-            ["innovation-selection", "all", "jury", "innovation-critic", "", "innovation/selection.csv", "", "", "promote one evidence-backed primary claim", "pending", "true", "claim decisions and jury rationale", ""],
+            ["innovation-discovery", "all", "innovation", "semantic-mapper;baseline-failure", "", "innovation/claim_portfolio.csv", "", "", "choose faithful formulation, minimal repair, or no claim", "pending", "false", "innovation claim portfolio and opportunity map", ""],
+            ["innovation-evidence", "all", "experiment", "innovation-discovery;profile-audit", "", "innovation/claim_experiments.csv", "", "", "do not promote while rules are unverified", "pending", "false", "nearest-precedent, falsification and ablation evidence", ""],
+            ["innovation-critic", "all", "red-team", "innovation-evidence", "", "innovation/critic_findings.csv", "", "", "reject unsupported complexity", "pending", "false", "blind critic findings", ""],
+            ["innovation-selection", "all", "jury", "innovation-critic", "", "innovation/selection.csv", "", "", "promote only supported claims or record none", "pending", "false", "claim decisions and jury rationale", ""],
         ]
         for task_id in model_task_ids:
             task_rows.append(
-                [task_id, "assigned", "model", "innovation-selection", "", f"branches/{task_id}", "", "", "baseline branch", "pending", "true", "model, code, results and branch summary", ""]
+                [task_id, "assigned", "model", "profile-audit;problem-route;semantic-mapper;strong-baseline", "", f"branches/{task_id}", "", "", "baseline branch", "pending", "true", "model, code, results and branch summary", ""]
             )
         joined_models = ";".join(model_task_ids)
         task_rows.extend(
             [
-                ["model-freeze", "all", "selection", joined_models, "", "synthesis/model_selection.json", "", "", "select the best validated solution, including the baseline when warranted", "pending", "true", "question-level model decisions and rejection reasons", ""],
+                ["model-freeze", "all", "selection", joined_models, "", "synthesis/model_selection.json", "", "", "select the best validated solution, including the baseline when warranted", "pending", "true", "question-level adaptive evidence profiles, decisions and rejection reasons", ""],
+                ["review-router", "all", "routing", "model-freeze", "", "synthesis/review_route.json", "", "", "route statistical review only where evidence profile requires it", "pending", "true", "review route and implementation-assumption checks", ""],
                 ["reproduction", "all", "reproduction", "model-freeze", "", "audits/reproduction", "", "", "rerun selected solution", "pending", "true", "clean-run report", ""],
-                ["paper", "all", "writing", "model-freeze", "", "paper", "", "", "minimal complete paper", "pending", "true", "direct-LaTeX paper", ""],
+                ["paper-payload", "all", "synthesis", "model-freeze", "", "synthesis/paper_payload.json", "", "", "export scientific content without control-plane prose", "pending", "true", "sanitized question-level paper payload", ""],
+                ["paper", "all", "writing", "paper-payload", "", "paper", "", "", "write only from the sanitized payload and verified result/citation identifiers", "pending", "true", "direct-LaTeX contest paper", ""],
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
-                ["scientific-review", "all", "review", "paper;citation-audit;reproduction", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "scientific, statistical and claim review", ""],
-                ["submission", "all", "submission", "scientific-review", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
+                ["scientific-review", "all", "review", "paper;citation-audit;reproduction;review-router", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "routed scientific, implementation, statistical, uncertainty and claim review", ""],
+                ["paper-presentation", "all", "presentation", "scientific-review", "", "audits/presentation", "", "", "keep rigorous control-plane evidence out of contest prose", "pending", "true", "language firewall, precision budget, figure-density and paragraph-value audit", ""],
+                ["submission", "all", "submission", "paper-presentation", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
             ]
         )
         with task_board_path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -596,7 +633,11 @@ def create_workspace(args: argparse.Namespace) -> Path:
             "- [ ] Any additional material explicitly required by current rules is present\n"
             "- [ ] Task dependencies are closed and every blocking task has an owner, evidence and fallback\n"
             "- [ ] Support archive was built from support_manifest.json and passed identity/secret scanning\n"
-            "- [ ] Independent scientific, statistical and claim review is closed\n"
+            "- [ ] Review routing matches each question's evidence profile; statistical not_applicable decisions remain internal\n"
+            "- [ ] Independent scientific, implementation, statistical, uncertainty and claim review is closed\n"
+            "- [ ] paper_payload.json is ready and final prose contains no audit/freeze/hash/status meta-language\n"
+            "- [ ] Displayed precision is justified by material input/model uncertainty rather than solver digits\n"
+            "- [ ] Every retained figure supports one argument and remains readable at final LaTeX size\n"
             "- [ ] Submission build passes and every rendered PDF page has been visually inspected\n"
             "- [ ] Uploaded files match frozen hashes\n",
         )

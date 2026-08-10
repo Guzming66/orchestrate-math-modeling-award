@@ -33,6 +33,10 @@
     "baseline_gain_coverage",
     "reproducibility_rate",
     "paper_mapping_rate",
+    "paper_meta_language_rate",
+    "adaptive_review_accuracy",
+    "implementation_gap_detection_rate",
+    "presentation_blind_score",
     "blind_quality_score"
   ]
 }

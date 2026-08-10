@@ -1,12 +1,113 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/orchestrate-math-modeling/model-selection-v1.schema.json",
-  "title": "Evidence-backed model selection",
+  "$id": "https://example.invalid/orchestrate-math-modeling/model-selection-v2.schema.json",
+  "title": "Adaptive evidence-profile model selection",
   "type": "object",
   "required": ["schema_version", "status", "questions"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "status": {"enum": ["draft", "frozen"]},
-    "questions": {"type": "array", "minItems": 1}
+    "questions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/question"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "frozen"}}, "required": ["status"]},
+      "then": {"properties": {"questions": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "artifactEvidence": {
+      "type": "object",
+      "required": ["artifact_path", "sha256", "command_or_check", "checked_at"],
+      "properties": {
+        "artifact_path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+        "command_or_check": {"type": "string", "minLength": 1},
+        "checked_at": {"type": "string", "minLength": 1}
+      }
+    },
+    "verificationCheck": {
+      "type": "object",
+      "required": ["check_type", "status", "summary"],
+      "properties": {
+        "check_type": {"type": "string", "minLength": 1},
+        "status": {"enum": ["pending", "pass", "not_applicable"]},
+        "summary": {"type": "string", "minLength": 1}
+      }
+    },
+    "postFitEvidence": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactEvidence"},
+        {
+          "type": "object",
+          "required": ["model_id", "result_summary", "verification_checks"],
+          "properties": {
+            "model_id": {"type": "string", "minLength": 1},
+            "result_summary": {"type": "string", "minLength": 1},
+            "verification_checks": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/verificationCheck"}
+            }
+          }
+        }
+      ]
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "question_id", "evidence_profile", "problem_structure", "candidates",
+        "strong_baseline_id", "post_fit_evidence", "selected_model_id",
+        "selection_rationale", "complexity_tradeoff", "rejected_models"
+      ],
+      "properties": {
+        "question_id": {"type": "string", "minLength": 1},
+        "evidence_profile": {
+          "enum": ["analytical", "deterministic_numerical", "optimization", "statistical", "simulation", "machine_learning"]
+        },
+        "problem_structure": {
+          "type": "object",
+          "required": ["target", "data", "constraints", "validation_anchor"],
+          "properties": {
+            "target": {"type": "string", "minLength": 1},
+            "data": {"type": "string", "minLength": 1},
+            "constraints": {"type": "string", "minLength": 1},
+            "validation_anchor": {"type": "string", "minLength": 1}
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["model_id", "pre_fit_rationale"],
+            "properties": {
+              "model_id": {"type": "string", "minLength": 1},
+              "pre_fit_rationale": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "strong_baseline_id": {"type": "string", "minLength": 1},
+        "planned_verification_checks": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "post_fit_evidence": {"type": "array", "items": {"$ref": "#/$defs/postFitEvidence"}},
+        "selected_model_id": {"type": "string"},
+        "selection_rationale": {"type": "string", "minLength": 1},
+        "complexity_tradeoff": {"type": "string", "minLength": 1},
+        "rejected_models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["model_id", "reason"],
+            "properties": {
+              "model_id": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
   }
 }

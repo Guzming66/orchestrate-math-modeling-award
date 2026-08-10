@@ -2,9 +2,12 @@
 
 ## 核心定义
 
-创新不是模型数量、算法名称或复杂度。把可晋级的创新主张写成：
+创新不是模型数量、算法名称或复杂度。先选择真实推理路径：
 
-`题目结构 → 强基线 → 已证实的基线失败 → 最小必要改变 → 增益/失效证据 → 最近先例与差异 → 论文落点`
+- **Path A — Faithful Formulation**：`题意语义 → 保真数学表述 → 性质/数值验证 → 简化 benchmark → 最近先例与差异 → 论文落点`；
+- **Path B — Failure-driven Change**：`题目结构 → 强基线 → 已证实的基线失败 → 最小必要改变 → 增益/失效证据 → 最近先例与差异 → 论文落点`。
+
+题目已经明确要求完整对象、有限线段、动态约束或守恒结构时，直接按 Path A 建立正确模型。不得先故意建立不忠实的简化模型，再把恢复题意包装成“修复 baseline failure”。简化模型可作为解释近似代价的 benchmark。任何超出题意保真所需的额外复杂度仍走 Path B。
 
 最终可以只有一个传统主模型和一个强创新点。融合、集成或 hybrid 本身不获得创新信用；只有组件分别解决不同失败机制、存在明确数学接口且逐组件消融证明不可替代时，才把融合视为创新的一部分。不得声称世界首创或保证奖项。
 
@@ -38,11 +41,12 @@
 - `model_structure`：题目确实需要的新模型机制；
 - `model_fusion`：仅在组件必要性、接口和消融均通过时使用。
 
-## Wave 1 — Structure & Baseline
+## Wave 1 — Structure, Semantics & Baseline
 
 1. **Structure Mapper** 只抽取数学对象、数据生成机制、守恒/网络/时空/控制结构、可识别性、子问接口和验证锚点，不先报算法名。
-2. **Strong Baseline Builder** 为每个关键子问建立最自然、最简单、可复现的经典基线，冻结输入、指标和切分。
-3. **Baseline Failure Mapper** 用 artifact-backed 测试识别具体失败机制；“精度不够”“模型太简单”不算失败机制。
+2. **Semantic Fidelity Mapper** 判断题意是否直接规定必须保留的对象、边界、时序或物理关系；若是，建立保真表述并选择一个可解释的简化 benchmark。
+3. **Strong Baseline Builder** 对需要复杂度裁决的部分建立最自然、最简单、可复现的经典基线，冻结输入、指标和切分。
+4. **Baseline Failure Mapper** 只对 Path B 用 artifact-backed 测试识别具体失败机制；“精度不够”“模型太简单”不算失败机制。
 
 Failure Mapper 提示词：
 
@@ -55,11 +59,10 @@ Failure Mapper 提示词：
 
 ## Wave 2 — Innovation Discovery
 
-让隔离的 scouts 从不同 innovation axis 寻找解决已验证 failure 的最小改动。每张 `claim card` 回答：
+让隔离的 scouts 从不同 innovation axis 寻找保真表述或解决已验证 failure 的最小改动。每张 `claim card` 先声明 `reasoning_path`，再回答：
 
-- 哪个题目结构导致哪个基线假设失败；
-- failure 的可复核证据是什么；
-- proposed change 如何直接作用于 failure；
+- Path A：题意明确要求什么，保真表述保留了什么，简化 benchmark 忽略了什么，保真性如何验证；
+- Path B：哪个题目结构导致哪个基线假设失败，failure 的证据是什么，改动如何直接作用于 failure；
 - 数学表达和最简单替代方案是什么；
 - 每层额外复杂度为什么必要；
 - 如何证伪、消融，失败时退回什么基线；
@@ -73,8 +76,9 @@ Cross-domain Analogist 可以给出源领域、结构映射、失配点和否定
 
 1. **Literature Auditor** 使用 `$citation-management`，核对原始来源、权威元数据、正式版本、撤稿/更正状态、最近先例和原文定位。搜索页和 AI 回答只能发现线索。
 2. **Experimenter** 先做最便宜的 falsification，再按需做 ablation 和 robustness。实验必须冻结同口径基线、数据/fixture、命令、环境、种子、指标、结果 artifact 和 SHA-256。
-3. 消融对象是“创新改变开/关”，不是只比较整套 Model A/Model B。
-4. fusion/ensemble/hybrid 必须同时满足：组件对应不同 failure、数学接口明确、每个组件均有通过的消融；否则不给创新信用。
+3. Path A 增加 `semantic_fidelity` 测试：核对题意对象、定义域、边界和代码实现，并比较简化 benchmark 造成的差异；这证明表述是否忠实，不自动证明创新。
+4. 消融对象是“创新改变开/关”，不是只比较整套 Model A/Model B。
+5. fusion/ensemble/hybrid 必须同时满足：组件对应不同 failure、数学接口明确、每个组件均有通过的消融；否则不给创新信用。
 
 ## Wave 4 — Paper Jury
 
@@ -82,15 +86,18 @@ Critic 先执行硬否决，再由 Jury 做 Pareto/lexicographic 裁决，不计
 
 `problem fit → evidence → necessity → novelty → robustness → parsimony → communication`
 
-Jury 的 1–5 分只作诊断：问题贴合、证据强度、必要性、新颖性、稳健性、简洁性和表达清晰度。最终至少晋级一个证据充分的 `primary` claim，可有 supporting claims；不要求 safe/stretch，也不限制为 2–3 个模型。最终 solution 由 `synthesis/model_selection.json` 按每个核心小题保存拟合前理由、拟合后证据、选择理由和淘汰理由。
+Jury 的 1–5 分只作诊断：问题贴合、证据强度、必要性、新颖性、稳健性、简洁性和表达清晰度。允许零 claim；若有晋级，至少一个必须是证据充分的 `primary`，其余可为 supporting claims。不要求 safe/stretch，也不限制为 2–3 个模型。最终 solution 由 `synthesis/model_selection.json` 按每个核心小题保存拟合前理由、拟合后证据、选择理由和淘汰理由。
+
+任务图中，模型分支直接依赖题面路由、语义映射和强基线。Innovation discovery/evidence/Critic/Jury 是条件式支路：没有 claim 时允许保持无晋级记录；一旦 `selection.csv` 出现 `promote`，对应先例、实验、Critic、Jury 和论文映射全部转为硬门禁。
 
 ## 真正的阻断条件
 
 任一晋级 claim 出现以下情况即阻断：
 
-- 没有强基线或明确 baseline failure；
-- failure 没有真实 artifact、哈希、检查步骤和时间；
-- proposed change 与 failure 没有结构/因果联系；
+- 没有声明 `failure_driven` 或 `faithful_formulation` 推理路径；
+- Path A 没有明确题意语义、保真论证、简化 benchmark 或 semantic-fidelity artifact；
+- Path B 没有强基线、明确 baseline failure，或 failure 缺少真实 artifact、哈希、检查步骤和时间；
+- Path B 的 proposed change 与 failure 没有结构/因果联系；
 - 没有 falsification test；需要复杂度或融合却没有增量消融；
 - 最近先例、题录身份、原文支持或撤稿/更正状态未核实；
 - 只是换名、堆叠或增加复杂度而无独立增益；
@@ -100,6 +107,8 @@ Jury 的 1–5 分只作诊断：问题贴合、证据强度、必要性、新�
 ## 产物
 
 - `innovation/structure_map.md`
+- `innovation/semantic_fidelity_map.md`
+- `innovation/strong_baseline.md`
 - `innovation/baseline_failure_map.md`
 - `innovation/opportunity_map.md`
 - `innovation/claim_portfolio.csv`

@@ -12,7 +12,7 @@
 
 ## 单一真源
 
-只把 `paper/main.tex`、`paper/sections/*.tex`、`paper/generated/*.tex`、`paper/references.bib` 和 `paper/figures/` 视为论文源。最终 PDF 必须从这些文件直接构建。
+只把 `paper/main.tex`、`paper/sections/*.tex`、`paper/generated/*.tex`、`paper/references.bib` 和 `paper/figures/` 视为论文源。最终 PDF 必须从这些文件直接构建。论文手先完整读取 [paper-presentation-engine.md](paper-presentation-engine.md)，以已标记 `ready` 的 `synthesis/paper_payload.json` 为主要科学输入，不从 audits 或任务日志复制正文措辞。
 
 允许分支用 Markdown 记录推理，但不要把 Markdown、Word、HTML 或 Notebook 导出物转换成最终正文。不要使用 Pandoc，也不要让 `$mathmodel-skill` 的 `render_paper.py` 组装论文。若必须导入旧材料，人工迁移到一个隔离的 `.tex` 章节，逐段核对公式、引用和特殊字符，再删除平行格式。
 
@@ -55,11 +55,12 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine pdflatex --mode
 - 把可复现数值写成 `paper/generated/results.tex` 中的 LaTeX 宏，再在正文引用；不要在多处手抄数字。
 - 把程序生成的表格写成不含 `table` 外壳的 `.tex` 片段，由正文负责标题、标签和浮动位置。
 - 优先使用矢量 PDF 图片；栅格图使用足够分辨率并嵌入字体。所有坐标轴、图例和单位必须在最终页面尺寸下可读。
-- 如已安装 `$scientific-visualization`，用它完成诚实编码、颜色/灰度、区间含义和导出审计；否则按 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md) 执行同等检查。
+- 如已安装 `$data-analytics:visualize-data`，用它完成图表契约、诚实编码、颜色/灰度、区间含义、信息密度和导出审计；否则按 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md) 执行同等检查。
 - 每幅图登记 `mechanism / data / diagnostic / decision` 中一个主要证据职责；删除装饰性流程图、重复表格内容的图和没有参与论证的输出。
 - 为公式、图、表和章节设置稳定且唯一的标签前缀，如 `eq:`、`fig:`、`tab:`、`sec:`。
 - 避免直接使用 Unicode 数学符号代替 LaTeX 命令，避免复制不可见空格和特殊连字符。
 - 对宽表优先重构列、减少无意义小数或转为附录，不用整体缩小到不可读。
+- 先比较求解器误差、输入/参数不确定性、模型形式误差和题目要求精度；正文只显示足以支持答案位数的数值精度，机器精度留在审计台账。
 
 ## 引用与额外声明
 
@@ -104,7 +105,7 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine xelatex --main 
 
 ## 提交检查
 
-1. 填完 `final-submission-controls.md` 的台账与门禁后，运行 `finalize_submission.py`；不要单独把一次 LaTeX 编译成功当成终审通过。
+1. 先运行 `validate_paper_presentation.py`，再填完 `final-submission-controls.md` 的台账与门禁并运行 `finalize_submission.py`；不要单独把一次 LaTeX 编译成功当成终审通过。
 2. 确认编译报告无错误，并由 profile validator 确认未解析引用、缺字、占位符、严重超宽、纸张、匿名元数据、页数和文件大小均符合当届要求。
 3. 用 `pdfinfo` 复核页数、纸张尺寸和 PDF 元数据，并用文件系统复核大小。
 4. 用 `pdftoppm` 渲染全部页面，不只抽查第一页。

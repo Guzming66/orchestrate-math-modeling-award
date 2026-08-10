@@ -68,7 +68,7 @@ def validate_paper_innovation(workspace: Path) -> dict[str, object]:
             required(
                 row,
                 (
-                    "claim_id", "claim_sentence", "problem_structure", "baseline_failure",
+                    "claim_id", "claim_sentence", "problem_structure", "reasoning_path",
                     "method_change", "evidence_result_ids", "novelty_source_keys", "paper_section",
                     "paper_anchor", "claim_strength", "status", "artifact_path", "sha256",
                     "command_or_check", "checked_at", "reviewer",
@@ -76,6 +76,13 @@ def validate_paper_innovation(workspace: Path) -> dict[str, object]:
                 claim_id,
             )
         )
+        reasoning_path = row.get("reasoning_path", "").strip().lower()
+        if reasoning_path == "failure_driven":
+            errors.extend(required(row, ("baseline_failure",), claim_id))
+        elif reasoning_path == "faithful_formulation":
+            errors.extend(required(row, ("semantic_requirement",), claim_id))
+        else:
+            errors.append(f"{claim_id}: invalid reasoning_path")
         if row.get("status", "").strip().lower() != "verified":
             errors.append(f"{claim_id}: paper innovation record is not verified")
         evidence_ids = split_ids(row.get("evidence_result_ids", ""))
@@ -115,7 +122,7 @@ def validate_paper_innovation(workspace: Path) -> dict[str, object]:
         errors.extend(artifact_errors(workspace, row, f"{claim_id} paper mapping"))
 
     paper_sections = workspace / "paper" / "sections"
-    for path in paper_sections.glob("*.tex") if paper_sections.is_dir() else []:
+    for path in paper_sections.rglob("*.tex") if paper_sections.is_dir() else []:
         text = path.read_text(encoding="utf-8", errors="replace")
         for line_number, line in enumerate(text.splitlines(), start=1):
             visible = strip_tex_comments(line)
