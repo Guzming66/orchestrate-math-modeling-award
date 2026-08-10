@@ -55,7 +55,8 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine pdflatex --mode
 - 把可复现数值写成 `paper/generated/results.tex` 中的 LaTeX 宏，再在正文引用；不要在多处手抄数字。
 - 把程序生成的表格写成不含 `table` 外壳的 `.tex` 片段，由正文负责标题、标签和浮动位置。
 - 优先使用矢量 PDF 图片；栅格图使用足够分辨率并嵌入字体。所有坐标轴、图例和单位必须在最终页面尺寸下可读。
-- 如已安装 `$data-analytics:visualize-data`，用它完成图表契约、诚实编码、颜色/灰度、区间含义、信息密度和导出审计；否则按 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md) 执行同等检查。
+- 有源数据的量化图优先使用 `$scipilot-figure-skill` 完成数据剖析、论点驱动选图、最终尺寸绘制、程序自检、PNG 视觉复核、回改和矢量导出；`$data-analytics:visualize-data` 用于通用设计、交互探索和第二视角 QA。概念、流程、机理与网络图继续使用 TikZ/Graphviz/原生代码。SciPilot 不可用时按 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md) 执行同等检查。
+- 图的生成脚本必须记录所用解释器与库版本；若 SciPilot 安装目录含 `.venv/Scripts/python.exe`，统一用该解释器运行其脚本。先在源代码中完成版面调整，再用 `export_figure(..., tight=False)` 导出正式矢量 PDF，避免 tight bounding box 改写既定物理尺寸；紧边界 PNG 仅作为视觉预览。最终只将通过 `check_figure.py --strict` 和实际 LaTeX 页面复核的 PDF/必要 PNG 纳入 `paper/figures/`。
 - 每幅图登记 `mechanism / data / diagnostic / decision` 中一个主要证据职责；删除装饰性流程图、重复表格内容的图和没有参与论证的输出。
 - 为公式、图、表和章节设置稳定且唯一的标签前缀，如 `eq:`、`fig:`、`tab:`、`sec:`。
 - 避免直接使用 Unicode 数学符号代替 LaTeX 命令，避免复制不可见空格和特殊连字符。

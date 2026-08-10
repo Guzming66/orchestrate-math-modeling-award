@@ -144,7 +144,9 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - `$statistical-analysis`：只按 Review Router 处理确有随机数据、估计、预测或分布主张的小题。
 - `$uncertainty-and-units`：单位、量纲、误差传播与量级检查。
 - `$scientific-critical-thinking`：独立科学审查与主张边界。
-- `$data-analytics:visualize-data`：优先设计并审计量化科研图的证据职责、尺度、区间、颜色/灰度和最终 LaTeX 可读性；不可用时按同一图表契约直接使用 Matplotlib/Seaborn/TikZ/Graphviz。
+- `$scipilot-figure-skill`：优先处理有源数据的量化科研图。先确定论证目标并剖析数据，再选图、按最终尺寸绘制、运行程序自检与 AI 读图闭环，最后导出矢量 PDF；它不处理示意图、流程图或架构图。若其目录含 `.venv/Scripts/python.exe`，所有 SciPilot 脚本统一使用该解释器，避免污染或误用全局 Python。
+- `$data-analytics:visualize-data`：用于图表契约、交互探索、通用可视化设计和第二视角 QA；不能替代 SciPilot 的数据剖析与成图闭环。
+- 机理、几何、流程、网络或算法示意图使用可复现 TikZ/Graphviz/原生代码；不得为了调用 SciPilot 把概念图伪装成数据图。SciPilot 不可用时，按同一证据与成图契约直接使用 Matplotlib/Seaborn。
 
 拆成小题任务或独立验证任务时完整读取 [task-templates.md](references/task-templates.md)。每个任务只写自己的目录；共享符号、数据版本和接口由总控冻结。不要把预期答案、其他分支结论或优秀论文具体解法泄露给独立验证任务。
 

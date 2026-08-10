@@ -105,13 +105,15 @@ Payload 禁止出现 `workflow_stage`、freeze、acceptance、review/claim statu
 
 ## 图表信息密度
 
-使用 `$data-analytics:visualize-data` 设计和审计量化图表；若不可用，按同一契约用可复现 Matplotlib/Seaborn/TikZ/Graphviz 生成。
+先按图的数学对象分流：有源数据的折线、散点、分布、比较、误差、不确定性、热力图、诊断图和多面板结果图优先调用 `$scipilot-figure-skill`；机理、几何、流程、网络和算法示意图不交给 SciPilot，使用可复现 TikZ/Graphviz/原生代码。`$data-analytics:visualize-data` 可用于交互探索、通用设计和第二视角 QA，但不替代 SciPilot 的数据剖析与成图闭环。SciPilot 不可用时，按同一契约直接使用 Matplotlib/Seaborn。
 
 每图先写图表契约：分析问题、主要证据职责、源数据、编码、单位/区间、最终尺寸、输出路径和灰度区分。证据职责仅用 `mechanism / data / diagnostic / decision`。
 
+量化图依次执行：确认本图要证明的论文主张 → `profile_data.py` 剖析字段、样本量、缺失、分布、异常和分组 → 给出首选图及理由并拦截误导性图型 → 按论文最终栏宽渲染 → `visual_qa.py` 检查缺字、裁切和刻度重叠 → 读取 PNG 预览检查图例遮盖、面板对齐、灰度区分和数据完整性 → 修正并重渲，最多三轮仍失败则拆图或重选图型 → 通过后运行 `export_figure.py` 与 `check_figure.py --strict` 导出 PDF/必要的 PNG。先用布局工具解决边界，再以 `tight=False` 导出正式 PDF，避免 `bbox_inches='tight'` 改变声明的最终物理尺寸；紧边界 PNG 只作预览。每轮从绘图源代码修改，不在预览图上手工修图。
+
 检查关键结构是否在图中可见。若全局尺度把关键变化压成一条线，使用局部放大、inset、相对坐标或删除；不要保留“看起来完整但读不出结论”的图。图表与表格不重复同一信息：图用于结构、趋势和比较，表用于精确查数。
 
-优先矢量 PDF；栅格内容用高分辨率 PNG。最终判断必须在实际 LaTeX 栏宽和渲染 PDF 中完成，检查字体、图例、裁切、灰度和题注。
+优先矢量 PDF；栅格内容用高分辨率 PNG。误差棒、带状区间、箱线和显著性标记必须在题注写清 SD/SEM/CI/IQR、样本量、检验及校正。最终判断必须在实际 LaTeX 栏宽和渲染 PDF 中完成，检查字体、图例、裁切、灰度和题注；单独打开原图通过不等于论文版面通过。
 
 ## 摘要和终审
 

@@ -17,7 +17,7 @@
 
 必需：`mathmodel-skill`、`citation-management`。
 
-按题目路由：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`。科研绘图使用 `data-analytics:visualize-data`；它负责定量图表设计与 QA，总控仍负责论文图表的证据、篇幅和 LaTeX 集成。七个 Skill 合作可以覆盖完整建模与论文流程，但仍需要参赛队员判断题意、核实当届规则、检查代码和数据、审阅引用、确认 AI 披露并完成正式提交。
+按题目路由：`statistical-analysis`、`uncertainty-and-units`、`scientific-critical-thinking`。数据驱动的论文图优先使用 `scipilot-figure-skill` 完成数据剖析、选图、出版级绘制和视觉自检闭环；`data-analytics:visualize-data` 负责通用设计、交互探索和第二视角 QA。流程图、机理图与网络示意图仍使用 TikZ/Graphviz/原生代码。八个 Skill 合作可以覆盖完整建模与论文流程，但仍需要参赛队员判断题意、核实当届规则、检查代码和数据、审阅引用、确认 AI 披露并完成正式提交。
 
 ## 安装
 

@@ -132,9 +132,9 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 ## 科研制图审计
 
-任务说明：如已安装则使用 `$data-analytics:visualize-data`；否则按 `cumcm-paper-writing-and-figures.md` 的同一图表契约直接审计，不改变数据或模型结果。
+任务说明：有源数据的量化图如已安装则优先使用 `$scipilot-figure-skill`，并可用 `$data-analytics:visualize-data` 做交互探索或第二视角 QA；概念、流程、机理、几何与网络图不调用 SciPilot。任何绘图任务都不得改变数据或模型结果。
 
-逐图记录论点职责、源数据、变换、脚本、随机种子、单位、区间定义、输出路径和哈希。检查坐标尺度、缺失值、平滑/归一化、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出；全局尺度压缩关键结构时改用局部放大、inset 或相对坐标。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/PNG 放入 `paper/figures/`。
+逐图记录论点职责、源数据、变换、脚本、解释器/库版本、随机种子、单位、区间定义、输出路径和哈希。量化图执行 `论证目标 → profile_data.py → 图型选择与避坑 → 最终尺寸渲染 → visual_qa.py → AI 读取 PNG → 回改重渲 → export_figure.py → check_figure.py --strict → LaTeX 实页复核`。检查坐标尺度、缺失值、平滑/归一化、误差含义、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出；`check_figure.py` 对字体嵌入只给 warning 时再用 `pdffonts` 核对 `emb=yes`。全局尺度压缩关键结构时改用局部放大、inset 或相对坐标。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/必要 PNG 放入 `paper/figures/`。
 
 ## LaTeX 与提交包审计
 

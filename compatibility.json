@@ -14,6 +14,17 @@
       "required_files": ["SKILL.md", "scripts/validate_citations.py"],
       "cli_flags": ["--check-dois", "--report"],
       "required": true
+    },
+    {
+      "name": "scipilot-figure-skill",
+      "required_files": [
+        "SKILL.md",
+        "scripts/profile_data.py",
+        "scripts/export_figure.py",
+        "scripts/check_figure.py",
+        "scripts/visual_qa.py"
+      ],
+      "required": false
     }
   ],
   "commands": {"all": ["pdfinfo"]}
