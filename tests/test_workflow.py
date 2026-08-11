@@ -29,6 +29,7 @@ from validate_paper_question_coverage import validate_paper_question_coverage
 from validate_review_findings import validate_review_findings
 from validate_review_route import validate_review_route
 from validate_task_board import validate_task_board
+from audit_cumcm_corpus_style import build_cards, summarize
 
 
 STAMP = "2026-08-08T00:00:00+00:00"
@@ -125,9 +126,9 @@ class WorkflowTests(unittest.TestCase):
             main.write_text("\\input{sections/questions/q01.tex}\n", encoding="utf-8")
             section.write_text(
                 "\\section{问题一}\n"
-                "\\subsection{任务与判定}\n确定持续时间。\n"
-                "\\subsection{模型与求解}\n建立距离模型。\n"
-                "\\subsection{结果}\n得到 $T=1.4$ s。\n"
+                "\\subsection{任务与判定}\n根据给定轨迹计算满足遮蔽判据的持续时间。\n"
+                "\\subsection{模型与求解}\n在统一坐标系中建立距离函数并搜索判据边界。\n"
+                "\\subsection{结果}\n计算得到有效遮蔽持续时间 $T=1.4$ s。\n"
                 "\\subsection{数值验证与边界}\n网格加密、步长缩小与独立复算结果一致。\n",
                 encoding="utf-8",
             )
@@ -136,6 +137,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(any("paper-visible LaTeX label" in item for item in errors))
             self.assertTrue(any("judge-visible table or figure" in item for item in errors))
             self.assertEqual(audit["duties"], {"task": True, "model": True, "result": True, "validation": True})
+            self.assertEqual(audit["duty_content"], {"task": True, "model": True, "result": True, "validation": True})
             self.assertEqual(classify_artifact(main), "question_standalone")
 
             section.write_text(
@@ -199,6 +201,18 @@ class WorkflowTests(unittest.TestCase):
             )
             report = validate_paper_question_coverage(root)
             self.assertEqual(report["status"], "pass")
+
+            (root / "paper" / "generated" / "question_sections.tex").write_text(
+                "\\input{sections/questions/q02.tex}\n\\input{sections/questions/q01.tex}\n",
+                encoding="utf-8",
+            )
+            report = validate_paper_question_coverage(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("Q1 must load" in item for item in report["errors"]))
+            (root / "paper" / "generated" / "question_sections.tex").write_text(
+                "\\input{sections/questions/q01.tex}\n\\input{sections/questions/q02.tex}\n",
+                encoding="utf-8",
+            )
 
             (question_dir / "q02.tex").write_text("\\section{问题二}\n", encoding="utf-8")
             report = validate_paper_question_coverage(root)
@@ -438,9 +452,9 @@ class WorkflowTests(unittest.TestCase):
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 11)
+            self.assertEqual(manifest["workflow_version"], 12)
             payload = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["schema_version"], 2)
+            self.assertEqual(payload["schema_version"], 3)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["branches"], ["model-a"])
             self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
@@ -638,7 +652,7 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 11)
+            self.assertEqual(manifest["workflow_version"], 12)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["innovation_mode"], "standard")
             profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
@@ -698,7 +712,7 @@ class WorkflowTests(unittest.TestCase):
             )
             self.assertTrue((root / "innovation" / "semantic_fidelity_map.md").is_file())
 
-    def test_v10_migration_preserves_scientific_state_and_reopens_presentation(self) -> None:
+    def test_v11_migration_preserves_scientific_state_and_reopens_presentation(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             for relative in ("innovation", "compliance", "synthesis", "shared", "audits"):
@@ -706,8 +720,8 @@ class WorkflowTests(unittest.TestCase):
             (root / "competition_manifest.json").write_text(
                 json.dumps(
                     {
-                        "schema_version": 10,
-                        "workflow_version": 10,
+                        "schema_version": 11,
+                        "workflow_version": 11,
                         "competition": "CUMCM",
                         "year": 2026,
                         "branches": ["model-a"],
@@ -733,12 +747,13 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "synthesis" / "model_selection.json").read_text(encoding="utf-8")), model)
             self.assertEqual(json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8")), review)
             migrated = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
-            self.assertEqual(migrated["schema_version"], 2)
+            self.assertEqual(migrated["schema_version"], 3)
             self.assertEqual(migrated["status"], "draft")
+            self.assertEqual(migrated["questions"][0]["presentation_plan"]["answer_form"], "pending")
             self.assertEqual(migrated["questions"][0]["presentation_plan"]["mechanism_visual"], "pending")
-            self.assertTrue((root / "synthesis" / "paper_payload_v10.json").is_file())
+            self.assertTrue((root / "synthesis" / "paper_payload_v11.json").is_file())
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 11)
+            self.assertEqual(manifest["workflow_version"], 12)
 
     def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -965,7 +980,7 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "status": "draft",
                 "questions": [
                     {
@@ -1008,7 +1023,8 @@ class WorkflowTests(unittest.TestCase):
             section = root / "paper" / "sections" / "questions" / "q01.tex"
             section.write_text(
                 "\\section{问题一}\\label{sec:q1}\\n"
-                "由守恒关系建立最小费用流模型。\\subsection{验证}\\label{sec:q1-validation}\\n"
+                "由守恒关系建立最小费用流模型。\\subsection{结果}\\label{sec:q1-answer}\\n"
+                "所得方案满足全部守恒与容量约束。\\subsection{验证}\\label{sec:q1-validation}\\n"
                 "小规模枚举与网络流结果一致。\\n",
                 encoding="utf-8",
             )
@@ -1016,7 +1032,7 @@ class WorkflowTests(unittest.TestCase):
                 json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "optimization"}]}), encoding="utf-8"
             )
             payload = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "status": "ready",
                 "questions": [
                     {
@@ -1045,6 +1061,9 @@ class WorkflowTests(unittest.TestCase):
                             "decision": "保留最小费用流模型",
                         },
                         "presentation_plan": {
+                            "answer_form": "prose",
+                            "answer_anchor": "sec:q1-answer",
+                            "answer_takeaway": "所得方案满足全部守恒与容量约束",
                             "validation_form": "prose",
                             "validation_anchor": "sec:q1-validation",
                             "validation_takeaway": "小规模枚举与网络流结果一致",
@@ -1060,6 +1079,23 @@ class WorkflowTests(unittest.TestCase):
                 json.dumps(payload, ensure_ascii=False), encoding="utf-8"
             )
             self.assertEqual(validate_paper_presentation(root)["status"], "pass")
+            section.write_text(
+                section.read_text(encoding="utf-8").replace("\\label{sec:q1-answer}", ""),
+                encoding="utf-8",
+            )
+            (root / "paper" / "sections" / "06_global_validation.tex").write_text(
+                "\\section{全局验证}\\label{sec:q1-answer}\n",
+                encoding="utf-8",
+            )
+            report = validate_paper_presentation(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("answer_anchor is not present in its own question section" in item for item in report["errors"]))
+            section.write_text(
+                section.read_text(encoding="utf-8").replace(
+                    "\\subsection{结果}", "\\subsection{结果}\\label{sec:q1-answer}"
+                ),
+                encoding="utf-8",
+            )
             payload["questions"][0]["review_type"] = "implementation"
             (root / "synthesis" / "paper_payload.json").write_text(
                 json.dumps(payload, ensure_ascii=False), encoding="utf-8"
@@ -1083,6 +1119,7 @@ class WorkflowTests(unittest.TestCase):
                 "\\section{问题一}\\label{sec:q1}\n"
                 "\\begin{figure}\\input{figures/q1_geometry.tex}\\caption{视线遮蔽几何关系}"
                 "\\label{fig:q1-geometry}\\end{figure}\n"
+                "\\subsection{结果}\\label{sec:q1-answer}\n有效遮蔽持续 1.39 s。\n"
                 "\\subsection{验证}\\label{sec:q1-validation}\n加密计算与解析边界的差异小于 $10^{-4}$ s。\n",
                 encoding="utf-8",
             )
@@ -1115,6 +1152,9 @@ class WorkflowTests(unittest.TestCase):
                     "decision": "保留完整圆柱判据",
                 },
                 "presentation_plan": {
+                    "answer_form": "prose",
+                    "answer_anchor": "sec:q1-answer",
+                    "answer_takeaway": "有效遮蔽持续 1.39 s",
                     "validation_form": "prose",
                     "validation_anchor": "sec:q1-validation",
                     "validation_takeaway": "边界时刻达到正文显示精度",
@@ -1127,7 +1167,7 @@ class WorkflowTests(unittest.TestCase):
                 "citations": [],
             }
             (root / "synthesis" / "paper_payload.json").write_text(
-                json.dumps({"schema_version": 2, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                json.dumps({"schema_version": 3, "status": "ready", "questions": [question]}, ensure_ascii=False),
                 encoding="utf-8",
             )
             report = validate_paper_presentation(root)
@@ -1147,10 +1187,81 @@ class WorkflowTests(unittest.TestCase):
                 }
             ]
             (root / "synthesis" / "paper_payload.json").write_text(
-                json.dumps({"schema_version": 2, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                json.dumps({"schema_version": 3, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            report = validate_paper_presentation(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("never cited" in item for item in report["errors"]))
+            section.write_text(
+                section.read_text(encoding="utf-8").replace(
+                    "\\begin{figure}", "如图~\\ref{fig:q1-geometry} 所示，完整判据同时考虑目标边界与云团。\n\\begin{figure}",
+                ),
                 encoding="utf-8",
             )
             self.assertEqual(validate_paper_presentation(root)["status"], "pass")
+            question["figures"][0]["generator"] = "SciPilot"
+            (root / "synthesis" / "paper_payload.json").write_text(
+                json.dumps({"schema_version": 3, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            self.assertTrue(any("not mechanism diagrams" in item for item in validate_paper_presentation(root)["errors"]))
+
+    def test_corpus_style_audit_builds_distinct_per_paper_cards(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            cards = root / "cards.csv"
+            fields = [
+                "year", "paper_id", "problem", "title", "source_sha256",
+                "abstract_question_mapping_signal", "abstract_numeric_result_signal",
+                "abstract_validation_signal", "question_alignment", "per_question_closure_review",
+                "validation_signal_breadth", "problem_restatement_section", "problem_analysis_section",
+                "assumptions_section", "notation_section", "figure_caption_count_main",
+                "table_caption_count_main", "figure_table_roles_review",
+            ]
+            rows = [
+                {
+                    "year": "2025", "paper_id": "A001", "problem": "A", "title": "几何定位",
+                    "source_sha256": "a" * 64, "abstract_question_mapping_signal": "True",
+                    "abstract_numeric_result_signal": "True", "abstract_validation_signal": "True",
+                    "question_alignment": "complete", "per_question_closure_review": "model_result_with_validation",
+                    "validation_signal_breadth": "broad_signals", "problem_restatement_section": "False",
+                    "problem_analysis_section": "True", "assumptions_section": "True", "notation_section": "True",
+                    "figure_caption_count_main": "8", "table_caption_count_main": "2",
+                    "figure_table_roles_review": "mechanism_or_workflow|diagnostic_or_comparison",
+                },
+                {
+                    "year": "2025", "paper_id": "C002", "problem": "C", "title": "数据预测",
+                    "source_sha256": "b" * 64, "abstract_question_mapping_signal": "True",
+                    "abstract_numeric_result_signal": "True", "abstract_validation_signal": "False",
+                    "question_alignment": "partial", "per_question_closure_review": "model_result_validation_sparse",
+                    "validation_signal_breadth": "sparse_signals", "problem_restatement_section": "True",
+                    "problem_analysis_section": "True", "assumptions_section": "True", "notation_section": "True",
+                    "figure_caption_count_main": "12", "table_caption_count_main": "6",
+                    "figure_table_roles_review": "data_or_structure|result_or_decision",
+                },
+            ]
+            with cards.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(rows)
+            for paper_id, text in {
+                "A001": "针对问题一求得时长为1.4秒，并通过误差检验。",
+                "C002": "针对问题一得到预测值为20。首先处理数据，然后建立模型。",
+            }.items():
+                folder = root / "ocr" / "2025" / paper_id
+                folder.mkdir(parents=True)
+                (folder / "combined.txt").write_text(
+                    f"===== PAGE 1 =====\n摘要\n{text}\n关键词：测试\n===== PAGE 2 =====\n正文",
+                    encoding="utf-8",
+                )
+            result = build_cards(cards, root / "ocr")
+            self.assertEqual(len(result), 2)
+            self.assertNotEqual(result[0]["abstract_profile"], result[1]["abstract_profile"])
+            self.assertNotEqual(result[0]["visual_profile"], result[1]["visual_profile"])
+            report = summarize(result)
+            self.assertEqual(report["paper_count"], 2)
+            self.assertEqual(report["papers_with_three_or_more_front_matter_sections"], 2)
 
     def test_faithful_formulation_claim_can_pass_without_baseline_failure_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

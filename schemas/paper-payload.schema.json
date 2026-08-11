@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v2.schema.json",
+  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v3.schema.json",
   "title": "Sanitized contest-paper scientific payload",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "status", "questions"],
   "properties": {
-    "schema_version": {"const": 2},
+    "schema_version": {"const": 3},
     "status": {"enum": ["draft", "ready"]},
     "notes": {"type": "string"},
     "questions": {
@@ -65,10 +65,14 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
+              "answer_form", "answer_anchor", "answer_takeaway",
               "validation_form", "validation_anchor", "validation_takeaway", "mechanism_visual",
               "mechanism_visual_reason", "mechanism_visual_must_show"
             ],
             "properties": {
+              "answer_form": {"enum": ["pending", "prose", "equation", "table", "figure"]},
+              "answer_anchor": {"type": "string"},
+              "answer_takeaway": {"type": "string"},
               "validation_form": {"enum": ["pending", "prose", "equation", "table", "figure"]},
               "validation_anchor": {"type": "string"},
               "validation_takeaway": {"type": "string"},

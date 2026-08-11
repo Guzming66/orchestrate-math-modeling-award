@@ -53,6 +53,12 @@ INTERNAL_PAPER_PATTERNS = (
     (r"\bbaseline failure\b", "internal baseline-failure terminology"),
     (r"\bmateriality threshold\b", "internal materiality terminology"),
     (r"强基线", "internal strong-baseline terminology"),
+    (r"基线失败", "internal baseline-failure terminology"),
+    (r"最小(?:必要|充分)改变(?:原则)?", "internal minimal-change workflow terminology"),
+    (r"创新主张(?:卡|组合|台账|晋级)?", "internal innovation-claim workflow terminology"),
+    (r"(?:Critic|Jury|Scout)\s*(?:Agent)?", "internal agent-role terminology"),
+    (r"(?:论文表达|presentation)\s*(?:防火墙|firewall)", "internal presentation-firewall terminology"),
+    (r"评委可见验证", "internal judge-visible-validation terminology"),
     (r"材料性(?:阈值|标准)", "internal materiality terminology"),
     (r"(?:问题|Q\s*\d+).{0,8}(?:验收|冻结)", "question acceptance/freeze terminology"),
     (r"冻结的?下游接口", "internal downstream-interface terminology"),
@@ -72,6 +78,10 @@ LEAN_PAPER_WARNINGS = (
     (r"大大提高", "replace promotional language with a measured comparison"),
     (r"显而易见", "state the derivation or observable evidence"),
     (r"充分证明", "calibrate proof language to the available evidence"),
+    (r"具有(?:重要|较大)的(?:现实|实际|应用)意义", "replace generic significance with the decision or use enabled by the result"),
+    (r"从图中可以(?:很|明显地?|清楚地?)?(?:看出|发现)", "state the visible comparison, direction and condition"),
+    (r"(?:创新性地|创造性地)(?:提出|引入|建立|使用)", "state the problem-specific change and its evidence instead of self-awarding novelty"),
+    (r"(?:能够|可以)更好地(?:解决|描述|反映|刻画)", "name the failure resolved or the measured improvement"),
     (r"具有(?:较强|良好)的(?:鲁棒性|稳健性|普适性|适用性)", "replace generic robustness/applicability with a tested boundary"),
     (r"验证了模型的(?:正确性|准确性|有效性)", "name the validation target, metric and observed result"),
     (r"保守裁决", "state the adopted modeling criterion and its consequence directly"),
@@ -235,10 +245,12 @@ def audit_question_standalone(
     warnings: list[str] = []
     target = errors if mode == "submission" else warnings
     duties: dict[str, bool] = {}
+    duty_content: dict[str, bool] = {}
     metrics: dict[str, object] = {
         "question_id": f"Q{int(number)}",
         "source": str(section_path) if section_path else None,
         "duties": duties,
+        "duty_content": duty_content,
         "subsection_count": 0,
         "display_math_count": 0,
         "table_count": 0,
@@ -263,10 +275,32 @@ def audit_question_standalone(
         }
     )
     for duty, pattern in QUESTION_DUTIES.items():
-        present = any(pattern.search(heading.group("title")) for heading in headings)
+        matching = [
+            (index, heading) for index, heading in enumerate(headings)
+            if pattern.search(heading.group("title"))
+        ]
+        present = bool(matching)
         duties[duty] = present
         if not present:
             target.append(f"standalone question lacks a substantive {duty} section: {section_path.relative_to(paper_dir)}")
+            duty_content[duty] = False
+            continue
+        content_present = False
+        for index, heading in matching:
+            end = headings[index + 1].start() if index + 1 < len(headings) else len(visible)
+            body = visible[heading.end():end]
+            plain = re.sub(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?", " ", body)
+            plain = re.sub(r"[{}$\\\s]", "", plain)
+            embedded = re.search(
+                r"\\input\{|\\includegraphics|\\begin\{(?:equation|align|gather|table|figure|tabular)",
+                body,
+            )
+            if len(plain) >= 16 or embedded:
+                content_present = True
+                break
+        duty_content[duty] = content_present
+        if not content_present:
+            target.append(f"standalone {duty} heading has no substantive content: {section_path.relative_to(paper_dir)}")
 
     validation_segments: list[str] = []
     for index, heading in enumerate(headings):

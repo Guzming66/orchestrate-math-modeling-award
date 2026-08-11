@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "review_status": "reviewed",
+  "papers": 47,
+  "pages": 2379,
+  "main_body_pages": 1214,
+  "post_main_body_pages": 1165,
+  "contact_sheets": 170,
+  "pages_per_sheet": 16,
+  "method": "All PDF pages were reviewed through 4x4 contact sheets, with source-page fallback when a thumbnail was insufficient.",
+  "source_integrity": {
+    "source_pdf_hashes_matched": "47/47",
+    "combined_text_hashes_matched": "47/47"
+  },
+  "findings": [
+    "Main-body completeness must be judged separately from code and data appendices.",
+    "A geometry or mechanism figure earns space only when it exposes objects, directions, boundaries, coordinates, or a decision criterion used by the mathematics.",
+    "Tables are the preferred carrier for exact plans and numeric decisions; prose should interpret only decisive differences.",
+    "Repeated curves, generic three-dimensional surfaces, software screenshots, and decorative workflows do not add evidence by themselves.",
+    "Small multiples are useful only when scale, encoding, panel labels, and comparison order remain readable at final LaTeX size.",
+    "A common useful data-paper sequence is data structure and quality, then diagnostics and uncertainty, then decision results.",
+    "Frequency in winning papers is descriptive evidence, not a contest requirement or proof of award causality."
+  ],
+  "limitations": [
+    "The sample is not the complete population of awarded papers.",
+    "Page-level visual review does not prove formulas, exact numbers, table cells, or code correctness.",
+    "OCR-derived question boundaries are navigation aids and require semantic comparison with the original prompt."
+  ]
+}

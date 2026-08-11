@@ -71,6 +71,7 @@ python <skill>/scripts/build_latex.py <branch>/paper --engine xelatex --main qNN
 - 有源数据的量化图优先使用 `$scipilot-figure-skill` 完成数据剖析、论点驱动选图、最终尺寸绘制、程序自检、PNG 视觉复核、回改和矢量导出；`$data-analytics:visualize-data` 用于通用设计、交互探索和第二视角 QA。概念、流程、机理与网络图继续使用 TikZ/Graphviz/原生代码。SciPilot 不可用时按 [cumcm-paper-writing-and-figures.md](cumcm-paper-writing-and-figures.md) 执行同等检查。
 - 图的生成脚本必须记录所用解释器与库版本；若 SciPilot 安装目录含 `.venv/Scripts/python.exe`，统一用该解释器运行其脚本。先在源代码中完成版面调整，再用 `export_figure(..., tight=False)` 导出正式矢量 PDF，避免 tight bounding box 改写既定物理尺寸；紧边界 PNG 仅作为视觉预览。最终只将通过 `check_figure.py --strict` 和实际 LaTeX 页面复核的 PDF/必要 PNG 纳入 `paper/figures/`。
 - 每幅图登记 `mechanism / data / diagnostic / decision` 中一个主要证据职责；删除装饰性流程图、重复表格内容的图和没有参与论证的输出。
+- 每个小题在 `presentation_plan` 中登记 `answer_anchor` 与 `validation_anchor`；二者必须真实存在于对应 `qNN.tex`，不能指向附录、全局章节或另一小问。`Qn` 必须加载 `qNN.tex`。
 - 依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系的小题必须登记一幅 `mechanism` 图；在 `presentation_plan.mechanism_visual_must_show` 列出图中必须同时出现的对象与关系。图与公式使用同一符号和坐标方向，结果曲线不能代替几何解释图。
 - 每问把最强验证落到真实 `\label`：段落、式、表或图均可。正文至少写清比较对象、配置/容差、观察差异和结论边界，不能只引用内部复算或“证书通过”。
 - 为公式、图、表和章节设置稳定且唯一的标签前缀，如 `eq:`、`fig:`、`tab:`、`sec:`。

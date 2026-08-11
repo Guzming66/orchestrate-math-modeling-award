@@ -1,0 +1,32 @@
+{
+  "paper_count": 47,
+  "year_counts": {
+    "2022": 10,
+    "2023": 14,
+    "2024": 16,
+    "2025": 7
+  },
+  "figure_caption_range": [
+    0,
+    11,
+    44
+  ],
+  "table_caption_range": [
+    0,
+    6,
+    26
+  ],
+  "paper_role_counts": {
+    "data": 17,
+    "decision": 39,
+    "diagnostic": 18,
+    "mechanism": 31
+  },
+  "papers_with_three_or_more_front_matter_sections": 41,
+  "total_pdf_pages": 2379,
+  "total_main_body_pages": 1214,
+  "question_profiles": 173,
+  "full_text_audit_status": "complete",
+  "visual_review_status": "not represented by this report",
+  "evidence_boundary": "descriptive corpus audit; no award-causality inference"
+}

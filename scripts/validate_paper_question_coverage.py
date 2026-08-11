@@ -12,6 +12,7 @@ from build_latex import find_placeholders, strip_tex_comments
 
 
 INPUT_PATTERN = re.compile(r"\\input\{(sections/questions/[^}]+)\}")
+QUESTION_ID_PATTERN = re.compile(r"^Q(?P<number>\d+)$", re.IGNORECASE)
 HEADING_PATTERN = re.compile(r"\\(?:section|subsection|subsubsection|paragraph)\*?\{[^{}]*\}")
 NONCONTENT_PATTERN = re.compile(
     r"\\(?:label|index|addcontentsline)\{[^{}]*\}"
@@ -68,6 +69,16 @@ def validate_paper_question_coverage(workspace: Path) -> dict[str, object]:
         mappings.append({"question_id": question_id, "paper_section": relative})
         if not relative:
             continue
+        question_match = QUESTION_ID_PATTERN.fullmatch(question_id)
+        if question_match:
+            expected_name = f"q{int(question_match.group('number')):02d}.tex"
+            actual_name = Path(relative).name.lower()
+            if actual_name != expected_name:
+                errors.append(
+                    f"{question_id} must load sections/questions/{expected_name}, not {relative}"
+                )
+        else:
+            warnings.append(f"question id is not canonical Q<number>; verify semantic mapping manually: {question_id}")
         section_path = workspace / "paper" / relative
         try:
             visible = strip_tex_comments(section_path.read_text(encoding="utf-8"))

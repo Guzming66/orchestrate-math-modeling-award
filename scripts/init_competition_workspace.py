@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 11
+WORKFLOW_VERSION = 12
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -249,8 +249,11 @@ def create_workspace(args: argparse.Namespace) -> Path:
         root / "shared" / "problem_contract.md",
         "# Problem contract\n\n"
         "- Competition:\n- Year:\n- Problem:\n- Deadline:\n"
-        "- Required questions:\n- Objectives:\n- Constraints:\n"
-        "- Data dictionary:\n- Evaluation criteria:\n- Deliverables:\n",
+        "- Objectives:\n- Constraints:\n"
+        "- Data dictionary:\n- Evaluation criteria:\n- Deliverables:\n"
+        "\n## Question contract\n\n"
+        "| question_id | exact task verbs | required answer/deliverable | inputs and upstream dependencies | constraints/precision | verified against prompt |\n"
+        "|---|---|---|---|---|---|\n",
     )
     write_text_if_missing(
         root / "shared" / "problem_route.md",
@@ -412,10 +415,10 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_json_if_missing(
         root / "synthesis" / "paper_payload.json",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "status": "draft",
             "questions": [],
-            "notes": "Use contest-native content; make validation judge-visible and register a mechanism visual whenever geometry, trajectory or visibility carries the reasoning.",
+            "notes": "Use contest-native content; keep each direct-answer and strongest-validation anchor inside its own qNN.tex, and register a mechanism visual whenever geometry, trajectory or visibility carries the reasoning.",
         },
     )
     write_json_if_missing(

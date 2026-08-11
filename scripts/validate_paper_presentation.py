@@ -48,15 +48,16 @@ QUESTION_KEYS = {
 PRECISION_KEYS = {"display_rule", "justification", "dominant_uncertainty"}
 COMPLEXITY_KEYS = {"mode", "added_complexity", "structural_need", "incremental_gain", "decision"}
 PRESENTATION_KEYS = {
+    "answer_form", "answer_anchor", "answer_takeaway",
     "validation_form", "validation_anchor", "validation_takeaway", "mechanism_visual",
     "mechanism_visual_reason", "mechanism_visual_must_show",
 }
 FIGURE_KEYS = {"path", "role", "supported_claim", "source_data", "generator", "paper_anchor"}
 COMPLEXITY_MODES = {"no_extra_complexity", "semantics_required", "incremental_change"}
-VALIDATION_FORMS = {"prose", "equation", "table", "figure"}
+EVIDENCE_FORMS = {"prose", "equation", "table", "figure"}
 MECHANISM_VISUAL_MODES = {"required", "not_applicable"}
 GEOMETRY_SIGNAL = re.compile(
-    r"空间几何|几何关系|视线|遮蔽|可见(?:性|区域)|投影|碰撞|相交|坐标系|轨迹"
+    r"空间几何|几何关系|三维空间|方位角|视线|视锥|遮蔽|可见(?:性|区域)|投影|碰撞|相交|坐标系|轨迹"
     r"|line[ -]of[ -]sight|spatial geometry|visibility|occlusion|projection|collision"
     r"|intersection|coordinate system|trajectory",
     re.IGNORECASE,
@@ -77,6 +78,23 @@ def nonempty(value: object) -> bool:
 
 def latex_label_exists(source_text: str, label: str) -> bool:
     return bool(label) and re.search(r"\\label\s*\{\s*" + re.escape(label) + r"\s*\}", source_text) is not None
+
+
+def latex_reference_exists(source_text: str, label: str) -> bool:
+    return bool(label) and re.search(
+        r"\\(?:ref|eqref|autoref|cref|Cref)\s*\{\s*" + re.escape(label) + r"\s*\}",
+        source_text,
+    ) is not None
+
+
+def figure_caption(source_text: str, label: str) -> str | None:
+    for match in re.finditer(r"\\begin\{figure\*?\}(.*?)\\end\{figure\*?\}", source_text, re.DOTALL):
+        body = match.group(1)
+        if not latex_label_exists(body, label):
+            continue
+        caption = re.search(r"\\caption(?:\[[^{}]*\])?\{([^{}]+)\}", body, re.DOTALL)
+        return re.sub(r"\s+", " ", caption.group(1)).strip() if caption else None
+    return None
 
 
 def reject_unknown(mapping: dict[str, object], allowed: set[str], location: str, errors: list[str]) -> None:
@@ -113,8 +131,8 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
         for path in paper_root.rglob("*.tex") if "build" not in path.relative_to(paper_root).parts
     ) if paper_root.is_dir() else ""
 
-    if payload.get("schema_version") != 2:
-        errors.append("paper_payload.json schema_version must be 2")
+    if payload.get("schema_version") != 3:
+        errors.append("paper_payload.json schema_version must be 3")
     if payload.get("status") != "ready":
         errors.append("paper payload is not ready")
     ready = payload.get("status") == "ready"
@@ -215,20 +233,42 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
                 errors.append(f"{label}: complexity_value.incremental_gain must be text or null")
 
         visual_mode = ""
+        section_visible = ""
+        section_rel = str(item.get("paper_section", "")).replace("\\", "/").strip()
+        section = (workspace / section_rel).resolve()
+        try:
+            section.relative_to(workspace / "paper" / "sections")
+        except ValueError:
+            errors.append(f"{label}: paper_section must stay under paper/sections")
+        else:
+            if not section.is_file():
+                errors.append(f"{label}: paper_section is missing")
+            else:
+                section_visible = strip_tex_comments(section.read_text(encoding="utf-8", errors="replace"))
         if not isinstance(presentation, dict):
             errors.append(f"{label}: presentation_plan is missing")
         else:
+            answer_form = str(presentation.get("answer_form", "")).strip().lower()
+            answer_anchor = str(presentation.get("answer_anchor", "")).strip()
             validation_form = str(presentation.get("validation_form", "")).strip().lower()
             validation_anchor = str(presentation.get("validation_anchor", "")).strip()
             visual_mode = str(presentation.get("mechanism_visual", "")).strip().lower()
-            if validation_form not in VALIDATION_FORMS:
+            if answer_form not in EVIDENCE_FORMS:
+                errors.append(f"{label}: presentation_plan.answer_form is invalid")
+            if not nonempty(presentation.get("answer_takeaway")):
+                errors.append(f"{label}: presentation_plan.answer_takeaway is empty")
+            if not answer_anchor:
+                errors.append(f"{label}: presentation_plan.answer_anchor is empty")
+            elif not latex_label_exists(section_visible, answer_anchor):
+                errors.append(f"{label}: answer_anchor is not present in its own question section: {answer_anchor}")
+            if validation_form not in EVIDENCE_FORMS:
                 errors.append(f"{label}: presentation_plan.validation_form is invalid")
             if not nonempty(presentation.get("validation_takeaway")):
                 errors.append(f"{label}: presentation_plan.validation_takeaway is empty")
             if not validation_anchor:
                 errors.append(f"{label}: presentation_plan.validation_anchor is empty")
-            elif not latex_label_exists(paper_source_text, validation_anchor):
-                errors.append(f"{label}: validation_anchor is not present in paper LaTeX: {validation_anchor}")
+            elif not latex_label_exists(section_visible, validation_anchor):
+                errors.append(f"{label}: validation_anchor is not present in its own question section: {validation_anchor}")
             if visual_mode not in MECHANISM_VISUAL_MODES:
                 errors.append(f"{label}: presentation_plan.mechanism_visual is invalid")
             if not nonempty(presentation.get("mechanism_visual_reason")):
@@ -248,20 +288,11 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
         if GEOMETRY_SIGNAL.search(geometry_text) and visual_mode != "required":
             errors.append(f"{label}: geometry/trajectory/visibility reasoning requires a mechanism visual")
 
-        section_rel = str(item.get("paper_section", "")).replace("\\", "/").strip()
-        section = (workspace / section_rel).resolve()
-        try:
-            section.relative_to(workspace / "paper" / "sections")
-        except ValueError:
-            errors.append(f"{label}: paper_section must stay under paper/sections")
-        else:
-            if not section.is_file():
-                errors.append(f"{label}: paper_section is missing")
-
         if not isinstance(figures, list):
             errors.append(f"{label}: figures is not an array")
             figures = []
         mechanism_figure_count = 0
+        supported_claims: set[str] = set()
         for figure_index, figure in enumerate(figures, start=1):
             figure_label = f"{label}/figure[{figure_index}]"
             if not isinstance(figure, dict):
@@ -275,9 +306,29 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
                 errors.append(f"{figure_label}: invalid evidence role")
             elif role == "mechanism":
                 mechanism_figure_count += 1
+            claim = re.sub(r"\s+", "", str(figure.get("supported_claim", "")))
+            if claim:
+                if claim in supported_claims:
+                    warnings.append(f"{label}: multiple figures repeat the same supported claim; merge or differentiate them")
+                supported_claims.add(claim)
+            if re.search(r"效果(?:较为)?良好|精度(?:较)?高|显著(?:提高|提升)|充分证明|鲁棒性强", claim):
+                errors.append(f"{figure_label}: supported_claim is promotional or unmeasured")
+            generator = str(figure.get("generator", "")).strip().lower()
+            if re.search(r"powerpoint|photoshop|截图|手工(?:绘|修)|manual edit", generator):
+                errors.append(f"{figure_label}: figure generator is not reproducible")
+            if role == "mechanism" and "scipilot" in generator:
+                errors.append(f"{figure_label}: SciPilot is for source-backed quantitative figures, not mechanism diagrams")
             paper_anchor = str(figure.get("paper_anchor", "")).strip()
             if paper_anchor and not latex_label_exists(paper_source_text, paper_anchor):
                 errors.append(f"{figure_label}: paper_anchor is not present in paper LaTeX: {paper_anchor}")
+            elif paper_anchor:
+                caption = figure_caption(paper_source_text, paper_anchor)
+                if caption is None:
+                    errors.append(f"{figure_label}: registered figure has no paper caption")
+                elif re.fullmatch(r".{0,8}(?:结果|示意|关系|曲线|分析)图", caption):
+                    warnings.append(f"{figure_label}: caption is generic; name the object, condition, or comparison")
+                if not latex_reference_exists(paper_source_text, paper_anchor):
+                    errors.append(f"{figure_label}: registered figure is never cited with a LaTeX reference")
             figure_rel = str(figure.get("path", "")).replace("\\", "/").strip()
             figure_path = (workspace / figure_rel).resolve()
             try:

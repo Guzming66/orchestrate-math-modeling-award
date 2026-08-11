@@ -7,7 +7,7 @@
 3. schema v2 `model_selection.json` 对每个核心小题完成冻结，并通过对应 Evidence Profile。
 4. `review_route.json` 覆盖每问；implementation-assumption check 通过，统计审查未被错误跳过。
 5. Innovation Claim Engine 与论文创新映射通过。
-6. schema v2 `paper_payload.json` 为 ready，和冻结小题一致；每问有真实 `validation_anchor`，几何/轨迹/可见性推理已有 `mechanism` 图，并通过 Presentation Firewall。
+6. schema v3 `paper_payload.json` 为 ready，和冻结小题一致；每问的 `answer_anchor` 与 `validation_anchor` 都真实存在于本问 `qNN.tex`，几何/轨迹/可见性推理已有 `mechanism` 图，并通过 Presentation Firewall。
 7. schema v2 `review_findings.json` 覆盖 scientific、implementation、statistical、uncertainty、claims；critical 已关闭，open major 不超 policy。
 8. 引用、输入、结果和复现台账全部指向实际 artifact 且 hash 匹配。
 9. 所有 blocking task 已完成或有明确、可审计的 waiver。

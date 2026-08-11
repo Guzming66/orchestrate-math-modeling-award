@@ -42,7 +42,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 3. 运行 `python scripts/preflight.py <workspace>`。
 4. 原题与原始附件放入 `inputs/original/`，保留原文件和哈希。
 5. 冻结 `shared/problem_contract.md`：逐小题写目标、输入、输出、约束、评价标准、依赖和统一接口。
-6. 当已有 v8/v9/v10 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留旧文件，并把论文载荷升级为 v11 的评委可见验证与机理图契约。
+6. 当已有 v8–v11 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留旧文件，并把论文载荷升级为 v12 的本问直接答案、本问验证与机理图契约。
 
 `standard` 是默认模式；`championship` 只提高独立审查和稳健性要求，不强迫增加模型、Agent 或计算量。
 
@@ -113,25 +113,27 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 写论文前完整读取 [paper-presentation-engine.md](references/paper-presentation-engine.md)。Control Plane、Scientific Solution Plane 和 Contest Paper Plane 单向隔离：
 
-- 模型冻结后生成 schema v2 `synthesis/paper_payload.json`；论文手以它为主要科学输入，只在核对事实时读取结果或引用台账。
+- 模型冻结后生成 schema v3 `synthesis/paper_payload.json`；论文手以它为主要科学输入，只在核对事实时读取结果或引用台账。
 - Payload 和正文不得出现 workflow stage、freeze/验收、hash、audit/review status、claim status、downstream interface、reproduction bookkeeping 或“不虚构置信区间/不提出创新”等否定性元话语。
 - 把内部概念翻译为竞赛原生语言：strong baseline → 基准/简化模型；baseline failure → 简化模型的具体局限；artifact-backed evidence → 数值/实验/推导结果。
 - 每段必须贡献于模型、推导、算法、结果、比较、验证、敏感性、局限或决策；内部状态段默认删除。
+- 每问先形成“主张—最短充分证据—最佳载体”表，再写正文；不按页数、图数或表数扩写，模型、结果或验证标题下没有实际内容时不得放行。
 - 正文数值精度由输入、参数、模型形式和显示需求决定，不展示远小于材料性不确定性的求解器位数。
-- 每问填写 `presentation_plan`：把最强验证落实为正文中的段落、式、表或图，并用实际 LaTeX `\label` 登记 `validation_anchor`；不得只写“已独立复算/已有证书”而不给评委可核验的比较、误差或边界。
+- 每问填写 `presentation_plan`：用 `answer_form / answer_anchor / answer_takeaway` 登记最短直接答案，用 `validation_form / validation_anchor / validation_takeaway` 登记最强验证；两个锚点都必须位于本问 `qNN.tex`，不得借用附录、全局章节或另一问的标签。不得只写“已独立复算/已有证书”而不给评委可核验的比较、误差或边界。
 - 当问题依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系时，至少登记一幅 `role=mechanism` 的直观图，列出必须同时出现的对象与关系。几何图使用可复现 TikZ、Matplotlib 3D、Graphviz 或原生代码，不交给 SciPilot；非几何问题可写明 `not_applicable` 理由。
+- 每幅登记图必须具有信息性题注、可复现图源、明确支持的论文主张，并在正文用 `\ref`/`\autoref`/`\cref` 编号引用；PowerPoint、截图、手工 P 图或让 SciPilot 生成机理示意图均不放行。尺度差异明显的几何问题优先用“全局场景 + 局部判据”双面板。
 - 运行 `python scripts/validate_paper_presentation.py <workspace>`。
 
 内部审计继续保留全部精度、命令和哈希；防火墙只约束论文表达，不降低证据标准。
 
 ## LaTeX 唯一真源
 
-写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)；CUMCM 中文论文同时完整读取 [cumcm-paper-writing-and-figures.md](references/cumcm-paper-writing-and-figures.md) 与其证据底稿 [cumcm-corpus-evidence-2022-2025.md](references/cumcm-corpus-evidence-2022-2025.md)。
+写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)；CUMCM 中文论文同时完整读取 [cumcm-paper-writing-and-figures.md](references/cumcm-paper-writing-and-figures.md) 与其证据底稿 [cumcm-corpus-evidence-2022-2025.md](references/cumcm-corpus-evidence-2022-2025.md)。需要核对逐篇差异时读取 [cumcm-paper-style-cards-2022-2025.csv](references/cumcm-paper-style-cards-2022-2025.csv) 与 [cumcm-paper-deep-reading-2022-2025.md](references/cumcm-paper-deep-reading-2022-2025.md)；全页视觉结论以 [cumcm-full-visual-review-summary-2022-2025.json](references/cumcm-full-visual-review-summary-2022-2025.json) 为边界。只迁移信息职责，不复制句子、模型、数值或版式。
 
 - 最终论文只维护 `paper/main.tex`、分章节 `.tex`、`paper/generated/*.tex`、`paper/figures/` 和 `paper/references.bib`。
 - 不经 Word、Markdown、HTML、Notebook、Pandoc 或其他格式转换生成最终正文。
 - 不把题面复述、候选池、Agent 分工、内部评分、artifact 路径、哈希、调试过程或泛化优缺点套话写入最终论文；这些内容留在审计与复现台账。
-- 按实际小题建立独立 `.tex` 文件，每问就地完成“任务与依赖—模型—结果—验证/边界—后续问题沿用的判据或参数”，并核对题目要求的表格与结果文件；只在跨问风险确实存在时单列全局稳健性章节。
+- 先逐项核对题面小问契约，再按实际小题建立独立 `.tex` 文件；`Qn` 必须对应 `qNN.tex`。每问就地完成“任务与依赖—模型—结果—验证/边界—后续问题沿用的判据或参数”，并核对题目要求的表格与结果文件；只在跨问风险确实存在时单列全局稳健性章节。正文必须脱离代码/数据附录仍能独立回答全部小问。
 - 草稿构建使用 profile 中的 engine：
 
   `python scripts/build_latex.py <workspace>/paper --engine xelatex --mode draft`
@@ -166,6 +168,6 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 `python scripts/finalize_submission.py <workspace>`
 
-硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、缺少 provenance、核心结果不可复现、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、最强验证没有纸面锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、占位符或仅标题章节、未关闭 critical/超阈值 major、哈希失配、profile 要求的产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
+硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、缺少 provenance、核心结果不可复现、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、占位符或仅标题章节、未关闭 critical/超阈值 major、哈希失配、profile 要求的产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
 
 只有 `audits/submission/final_report.json` 为 `pass` 才能报告“技术上可提交”。这不等同于赛事合规的最终法律判断，也不保证任何奖项；由队员复核并完成正式上传。
