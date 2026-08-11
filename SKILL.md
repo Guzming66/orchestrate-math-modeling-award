@@ -138,6 +138,12 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
   草稿构建始终标记为 `review_only`；存在占位符时必须向队员报告警告，不得把 `main.pdf` 称为最终稿。只有 submission-mode 构建和统一 Finalizer 全部通过后才可称为提交候选。
 
+- 独立小问 PDF 也必须走同一构建器：
+
+  `python scripts/build_latex.py <branch>/paper --engine xelatex --main qNN_standalone.tex --mode submission`
+
+  禁止把裸 `xelatex` 产物交给队员。独立稿只有 `build_report_qNN_standalone.json` 为 `pass`、`handoff_eligible=true` 且哈希匹配时才可称为“小问交付候选”；它永远不是赛事提交候选。构建器会检查竞赛语言、任务—模型—结果—验证职责、验证锚点、比较性验证的可见表/图和末页大面积空白。不要用页数或套话填充；缺少的是推导、比较、验证或边界时，补对应证据。
+
 - 程序生成数字与表格，正文只引用，禁止手抄关键结果。
 
 ## 总控任务与配套 Skills

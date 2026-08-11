@@ -128,7 +128,7 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 任务说明：只使用通过门禁的结果，不重新计算或发明数字。
 
-先完整读取 `paper-presentation-engine.md`，从通过模型门禁的结果生成 schema v2 `synthesis/paper_payload.json`。论文手以该 Payload 为主要科学输入，不从 audit prose 复制句子。每问先填写 `presentation_plan`：把最强验证落到正文真实 `\label`，并裁决是否需要机理/几何直观图；依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系时必须列出图中至少两个关键对象或关系。建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 按其 reasoning path 映射到 semantic requirement 或 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单、空标题或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX；draft 报告为 `review_only`，不得称为最终稿。
+先完整读取 `paper-presentation-engine.md`，从通过模型门禁的结果生成 schema v2 `synthesis/paper_payload.json`。论文手以该 Payload 为主要科学输入，不从 audit prose 复制句子。每问先填写 `presentation_plan`：把最强验证落到正文真实 `\label`，并裁决是否需要机理/几何直观图；依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系时必须列出图中至少两个关键对象或关系。建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 按其 reasoning path 映射到 semantic requirement 或 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单、空标题或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX；draft 报告为 `review_only`，不得称为最终稿。若逐问交付 `qNN_standalone.pdf`，必须用 `build_latex.py --main qNN_standalone.tex --mode submission`，并随交付核对 `question_handoff_candidate`、`handoff_eligible=true` 和 PDF 哈希；裸 `xelatex` 产物不得交付。
 
 ## 科研制图审计
 
@@ -140,6 +140,6 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 任务说明：不修改论证，只检查 LaTeX 工程和最终 PDF。
 
-先运行 `validate_paper_presentation.py` 和 `validate_paper_question_coverage.py`，确认 Payload 与冻结小题一致、正文没有内部元语言且每问恰有一个已载入的非空 LaTeX 文件。再从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
+先运行 `validate_paper_presentation.py` 和 `validate_paper_question_coverage.py`，确认 Payload 与冻结小题一致、正文没有内部元语言且每问恰有一个已载入的非空 LaTeX 文件。独立小问稿还要核对专属 build report，确认竞赛语言、四项实质职责、验证锚点、比较证据和末页密度均通过。再从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录。
 
 按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有模型选择、创新主张、科学审查、论文、profile 要求的支撑包、所有哈希和匿名/凭据扫描同时通过才允许放行。

@@ -5,10 +5,11 @@
 1. 单一真源
 2. 目录和所有权
 3. 构建循环
-4. 结果、图表与公式
-5. 引用与额外声明
-6. CUMCM 附录与支撑材料同步
-7. 提交检查
+4. 独立小问交付
+5. 结果、图表与公式
+6. 引用与额外声明
+7. CUMCM 附录与支撑材料同步
+8. 提交检查
 
 ## 单一真源
 
@@ -49,6 +50,18 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine pdflatex --mode
 构建器只负责直编 LaTeX、通用占位符/日志检查并报告页数、正文起点、纸张、大小和元数据。`finalize_submission.py` 只按已核验 `competition_profile.json` 执行纸张、页数、大小、目录、匿名性和附加材料门禁。自动检查不能替代匿名与附件人工审计。
 
 每次新增公式、表格、图片、引用或章节后重新构建。不要等到最后才发现宏包、浮动体或交叉引用问题。读取 `paper/build/build_report.json`，修复所有 `errors`；逐项判断 `warnings`。
+
+## 独立小问交付
+
+`qNN_standalone.pdf` 只用于逐问复核和合并前交付，不是赛事提交论文。它必须继续使用正式小问章节 `sections/questions/qNN.tex`，并通过统一构建器：
+
+```text
+python <skill>/scripts/build_latex.py <branch>/paper --engine xelatex --main qNN_standalone.tex --mode submission
+```
+
+裸 `xelatex` 只允许临时定位编译错误；由它产生且没有配套 `build_report_qNN_standalone.json` 的 PDF 不得交付。通过的小问报告标记为 `question_handoff_candidate` 和 `handoff_eligible=true`，同时保存 PDF 哈希；`submission_eligible` 始终为 false。
+
+独立稿不设机械页数目标。构建器改为检查实质职责：任务/判定、模型/推导、直接结果、验证/边界必须存在；比较性验证若涉及网格、步长、复算、扰动、对照或消融，必须落成有标签的表或图，不能压缩成一段“均通过”。对多页独立稿，末页正文只占页面高度不足 55% 时阻断交付，先调整浮动体和章节组织；不要用题面复述、算法名或泛化优缺点填白。
 
 ## 结果、图表与公式
 

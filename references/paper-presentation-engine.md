@@ -84,6 +84,8 @@ Payload 禁止出现 `workflow_stage`、freeze、acceptance、review/claim statu
 
 删除大段题面复述、算法验收流水账、重复结论、无意义复杂度公式和泛化优缺点套话。保留真正影响复算的搜索范围、种群规模、迭代上限、停止条件、网格步长和随机种子；放正文表格还是支撑材料由篇幅和 profile 决定。
 
+逐问独立稿不按页数机械扩写，也不能因“只是回放稿”省略论证。每份至少完成任务/判定、模型/推导、直接结果、验证/边界四项职责；比较性验证含多个网格、步长、复算、扰动、对照或消融配置时，优先用一张紧凑表或诊断图展示配置、差异和结论。若末页因浮动体漂移只占不到页面高度的一半左右，先重排图文或合并段落，不用题面复述和套话填充。
+
 ## 数值精度预算
 
 先比较：
@@ -138,3 +140,5 @@ python <skill>/scripts/validate_paper_presentation.py <workspace>
 ```
 
 该验证器检查 Payload 与冻结小题一致、Payload 不含控制平面字段、论文章节存在、图表文件存在，并扫描典型审计/冻结/哈希元语言。它不能替代评委式人工阅读；最终仍执行摘要 30 秒盲审和逐页 PDF 检查。
+
+逐问交付另外运行 `build_latex.py --main qNN_standalone.tex --mode submission`。只有报告为 `question_handoff_candidate` 且 `handoff_eligible=true` 时才能交给队员；该状态不等于赛事提交资格。

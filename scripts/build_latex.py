@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -86,6 +87,21 @@ BLOCKING_LOG_PATTERNS = (
     (r"LaTeX Warning: Reference .+ undefined", "undefined reference"),
     (r"There were undefined references", "undefined references remain"),
     (r"Label\(s\) may have changed.*Rerun", "cross-references need another run"),
+)
+QUESTION_STANDALONE_PATTERN = re.compile(r"^q(?P<number>\d+)_standalone\.tex$", re.IGNORECASE)
+HEADING_PATTERN = re.compile(r"\\(?:section|subsection|subsubsection|paragraph)\*?\{(?P<title>[^{}]+)\}")
+QUESTION_DUTIES = {
+    "task": re.compile(r"任务|问题分析|建模准备|判定|目标"),
+    "model": re.compile(r"模型|方法|推导|算法|求解"),
+    "result": re.compile(r"结果|结论|方案|回答"),
+    "validation": re.compile(r"验证|检验|敏感|误差|稳健|边界|复核"),
+}
+COMPARATIVE_VALIDATION_PATTERN = re.compile(
+    r"加密|步长|收敛|复算|枚举|敏感性|扰动|对照|比较|消融|网格|不同配置"
+)
+VISIBLE_EVIDENCE_PATTERN = re.compile(
+    r"\\begin\{(?:table|figure|tabular)\}|\\input\{[^{}]*(?:table|figure)[^{}]*\}",
+    re.IGNORECASE,
 )
 
 
@@ -192,6 +208,86 @@ def find_placeholders(text: str) -> list[str]:
     )
 
 
+def classify_artifact(main_path: Path) -> str:
+    if main_path.name == "main.tex":
+        return "full_paper"
+    if QUESTION_STANDALONE_PATTERN.fullmatch(main_path.name):
+        return "question_standalone"
+    return "auxiliary"
+
+
+def audit_question_standalone(
+    paper_dir: Path, main_path: Path, mode: str
+) -> tuple[dict[str, object], list[str], list[str]]:
+    match = QUESTION_STANDALONE_PATTERN.fullmatch(main_path.name)
+    if not match:
+        return {}, [], []
+
+    number = match.group("number")
+    names = [f"q{number}.tex", f"q{int(number):02d}.tex"]
+    section_path: Path | None = None
+    for name in dict.fromkeys(names):
+        candidate = paper_dir / "sections" / "questions" / name
+        if candidate.is_file():
+            section_path = candidate
+            break
+    errors: list[str] = []
+    warnings: list[str] = []
+    target = errors if mode == "submission" else warnings
+    duties: dict[str, bool] = {}
+    metrics: dict[str, object] = {
+        "question_id": f"Q{int(number)}",
+        "source": str(section_path) if section_path else None,
+        "duties": duties,
+        "subsection_count": 0,
+        "display_math_count": 0,
+        "table_count": 0,
+        "figure_count": 0,
+        "label_count": 0,
+        "validation_anchor_present": False,
+        "comparative_validation_visible": None,
+    }
+    if section_path is None:
+        target.append(f"standalone question source is missing for {main_path.name}")
+        return metrics, errors, warnings
+
+    visible = strip_tex_comments(section_path.read_text(encoding="utf-8", errors="replace"))
+    headings = list(HEADING_PATTERN.finditer(visible))
+    metrics.update(
+        {
+            "subsection_count": len(re.findall(r"\\subsection\*?\{", visible)),
+            "display_math_count": len(re.findall(r"\\\[|\\begin\{(?:equation|align|gather)\*?\}", visible)),
+            "table_count": len(re.findall(r"\\begin\{table\}", visible)),
+            "figure_count": len(re.findall(r"\\begin\{figure\}", visible)),
+            "label_count": len(re.findall(r"\\label\{[^{}]+\}", visible)),
+        }
+    )
+    for duty, pattern in QUESTION_DUTIES.items():
+        present = any(pattern.search(heading.group("title")) for heading in headings)
+        duties[duty] = present
+        if not present:
+            target.append(f"standalone question lacks a substantive {duty} section: {section_path.relative_to(paper_dir)}")
+
+    validation_segments: list[str] = []
+    for index, heading in enumerate(headings):
+        if not QUESTION_DUTIES["validation"].search(heading.group("title")):
+            continue
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(visible)
+        validation_segments.append(visible[heading.start():end])
+    validation_text = "\n".join(validation_segments)
+    anchor_present = bool(re.search(r"\\label\{[^{}]+\}", validation_text))
+    metrics["validation_anchor_present"] = anchor_present
+    if validation_text and not anchor_present:
+        target.append("standalone validation must have a paper-visible LaTeX label")
+
+    if validation_text and COMPARATIVE_VALIDATION_PATTERN.search(validation_text):
+        visible_evidence = bool(VISIBLE_EVIDENCE_PATTERN.search(validation_text))
+        metrics["comparative_validation_visible"] = visible_evidence
+        if not visible_evidence:
+            target.append("comparative validation is compressed into prose; add a judge-visible table or figure")
+    return metrics, errors, warnings
+
+
 def scan_sources(paper_dir: Path, mode: str) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -256,15 +352,22 @@ def scan_log(log_text: str, mode: str) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+def resolve_poppler_tool(name: str) -> str | None:
+    executable = shutil.which(name)
+    if not executable:
+        return None
+    path = Path(executable)
+    if os.name == "nt" and path.suffix.lower() in {".cmd", ".bat"}:
+        bundled = path.parents[2] / "native" / "poppler" / "Library" / "bin" / f"{name}.exe"
+        if bundled.is_file():
+            return str(bundled)
+    return executable
+
+
 def pdf_metadata(pdf_path: Path) -> tuple[dict[str, object], str | None]:
-    pdfinfo = shutil.which("pdfinfo")
+    pdfinfo = resolve_poppler_tool("pdfinfo")
     if not pdfinfo:
         return {}, "pdfinfo is missing"
-    pdfinfo_path = Path(pdfinfo)
-    if os.name == "nt" and pdfinfo_path.suffix.lower() in {".cmd", ".bat"}:
-        bundled_exe = pdfinfo_path.parents[2] / "native" / "poppler" / "Library" / "bin" / "pdfinfo.exe"
-        if bundled_exe.is_file():
-            pdfinfo = str(bundled_exe)
     command = [pdfinfo, str(pdf_path)]
     result = run(command, pdf_path.parent)
     if result.returncode != 0:
@@ -293,6 +396,30 @@ def pdf_metadata(pdf_path: Path) -> tuple[dict[str, object], str | None]:
     return metadata, None
 
 
+def pdf_text_page_fill(pdf_path: Path) -> tuple[list[float], str | None]:
+    pdftotext = resolve_poppler_tool("pdftotext")
+    if not pdftotext:
+        return [], "pdftotext is missing; standalone page-density audit was not run"
+    result = run([pdftotext, "-bbox-layout", str(pdf_path), "-"], pdf_path.parent)
+    if result.returncode != 0:
+        return [], "pdftotext bbox extraction failed; standalone page-density audit was not run"
+    try:
+        ratios = parse_page_fill(result.stdout)
+    except (ET.ParseError, KeyError, TypeError, ValueError):
+        return [], "pdftotext bbox output is invalid; standalone page-density audit was not run"
+    return ratios, None
+
+
+def parse_page_fill(bbox_xml: str) -> list[float]:
+    root = ET.fromstring(bbox_xml)
+    ratios: list[float] = []
+    for page in root.findall(".//{*}page"):
+        height = float(page.attrib["height"])
+        bottoms = [float(word.attrib["yMax"]) for word in page.findall(".//{*}word")]
+        ratios.append(round(max(bottoms, default=0.0) / height, 4) if height > 0 else 0.0)
+    return ratios
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compile and audit a direct-LaTeX contest paper.")
     parser.add_argument("paper_dir", help="Directory containing main.tex")
@@ -307,6 +434,7 @@ def main() -> int:
     args = parse_args()
     paper_dir = Path(args.paper_dir).expanduser().resolve()
     main_path = paper_dir / args.main
+    artifact_class = classify_artifact(main_path)
     build_dir = paper_dir / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
     if main_path.stem == "main":
@@ -317,6 +445,11 @@ def main() -> int:
         stdout_path = build_dir / f"build_stdout_{main_path.stem}.log"
 
     errors, warnings = scan_sources(paper_dir, args.mode)
+    question_audit, question_errors, question_warnings = audit_question_standalone(
+        paper_dir, main_path, args.mode
+    )
+    errors.extend(question_errors)
+    warnings.extend(question_warnings)
     engine = args.engine or ENGINE_BY_COMPETITION.get(args.competition or "", "")
     if not engine:
         errors.append("LaTeX engine is not specified; use --engine or the legacy --competition shortcut")
@@ -347,6 +480,7 @@ def main() -> int:
     pdf_author: str | None = None
     file_size_bytes: int | None = None
     sha256: str | None = None
+    page_text_fill: list[float] = []
     if pdf_path.is_file():
         metadata, metadata_warning = pdf_metadata(pdf_path)
         if metadata_warning:
@@ -362,6 +496,16 @@ def main() -> int:
         pdf_author = str(author_value) if author_value is not None else None
         file_size_bytes = pdf_path.stat().st_size
         sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+        if artifact_class == "question_standalone":
+            page_text_fill, density_warning = pdf_text_page_fill(pdf_path)
+            if density_warning:
+                target = errors if args.mode == "submission" else warnings
+                target.append(density_warning)
+            elif len(page_text_fill) >= 2 and page_text_fill[-1] < 0.55:
+                target = errors if args.mode == "submission" else warnings
+                target.append(
+                    f"standalone final page uses only {page_text_fill[-1]:.1%} of page height; repair float placement or consolidate the section"
+                )
     else:
         errors.append("compiled PDF is missing")
 
@@ -372,11 +516,22 @@ def main() -> int:
     if body_match:
         body_pages = int(body_match.group(1))
 
+    if errors or args.mode == "draft":
+        release_class = "review_only"
+    elif artifact_class == "full_paper":
+        release_class = "submission_candidate"
+    elif artifact_class == "question_standalone":
+        release_class = "question_handoff_candidate"
+    else:
+        release_class = "auxiliary_candidate"
+
     report = {
         "status": "pass" if not errors else "block",
         "mode": args.mode,
-        "release_class": "submission_candidate" if args.mode == "submission" else "review_only",
-        "submission_eligible": args.mode == "submission" and not errors,
+        "artifact_class": artifact_class,
+        "release_class": release_class,
+        "submission_eligible": artifact_class == "full_paper" and args.mode == "submission" and not errors,
+        "handoff_eligible": args.mode == "submission" and not errors,
         "competition": args.competition,
         "engine": engine,
         "source": str(main_path),
@@ -389,6 +544,8 @@ def main() -> int:
         "file_size_bytes": file_size_bytes,
         "pdf_author": pdf_author,
         "sha256": sha256,
+        "page_text_fill": page_text_fill,
+        "question_audit": question_audit,
         "errors": sorted(set(errors)),
         "warnings": sorted(set(warnings)),
     }

@@ -16,6 +16,8 @@
 
 Finalizer 从 profile 的 `build.latex_engine` 与 `build.main_document` 构建正文，不根据赛事名猜引擎。AI 声明、详情 PDF、支撑包、纸张、页数、大小和官方文件名只按 profile 执行。
 
+`qNN_standalone.pdf` 只作为逐问交付候选：必须有通过的 `build_report_qNN_standalone.json`，但其 `submission_eligible` 永远为 false。赛事正文只能由 profile 指定的主文档生成；不得把独立小问稿改名后提交。
+
 Profile 的 `requirements.artifacts` 为每个必需产物定义：
 
 - `artifact_id`

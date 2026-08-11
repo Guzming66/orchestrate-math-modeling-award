@@ -16,7 +16,7 @@ SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from finalize_submission import check_ai_compliance, check_data_provenance, finalize
-from build_latex import scan_sources
+from build_latex import audit_question_standalone, classify_artifact, parse_page_fill, scan_sources
 from migrate_workspace import migrate
 from package_submission import package_workspace
 from score_claim_benchmark import score
@@ -115,6 +115,49 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(any("review-only" in item for item in warnings))
             errors, _ = scan_sources(paper, "submission")
             self.assertTrue(any("placeholder" in item for item in errors))
+
+    def test_standalone_question_uses_strict_handoff_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            paper = Path(temporary)
+            section = paper / "sections" / "questions" / "q01.tex"
+            section.parent.mkdir(parents=True)
+            main = paper / "q01_standalone.tex"
+            main.write_text("\\input{sections/questions/q01.tex}\n", encoding="utf-8")
+            section.write_text(
+                "\\section{问题一}\n"
+                "\\subsection{任务与判定}\n确定持续时间。\n"
+                "\\subsection{模型与求解}\n建立距离模型。\n"
+                "\\subsection{结果}\n得到 $T=1.4$ s。\n"
+                "\\subsection{数值验证与边界}\n网格加密、步长缩小与独立复算结果一致。\n",
+                encoding="utf-8",
+            )
+            audit, errors, warnings = audit_question_standalone(paper, main, "submission")
+            self.assertEqual(warnings, [])
+            self.assertTrue(any("paper-visible LaTeX label" in item for item in errors))
+            self.assertTrue(any("judge-visible table or figure" in item for item in errors))
+            self.assertEqual(audit["duties"], {"task": True, "model": True, "result": True, "validation": True})
+            self.assertEqual(classify_artifact(main), "question_standalone")
+
+            section.write_text(
+                section.read_text(encoding="utf-8").replace(
+                    "\\subsection{数值验证与边界}",
+                    "\\subsection{数值验证与边界}\\label{sec:q1-validation}\n"
+                    "\\begin{table}\\caption{加密结果}\\begin{tabular}{cc}网格&时长\\\\45&1.4\\end{tabular}\\end{table}",
+                ),
+                encoding="utf-8",
+            )
+            _, errors, warnings = audit_question_standalone(paper, main, "submission")
+            self.assertEqual(errors, [])
+            self.assertEqual(warnings, [])
+
+    def test_page_fill_parser_detects_sparse_final_page(self) -> None:
+        bbox = (
+            '<html xmlns="http://www.w3.org/1999/xhtml"><body><doc>'
+            '<page height="800"><word yMax="720">full</word></page>'
+            '<page height="800"><word yMax="320">sparse</word></page>'
+            '</doc></body></html>'
+        )
+        self.assertEqual(parse_page_fill(bbox), [0.9, 0.4])
 
     def test_cumcm_initializer_uses_lean_question_level_latex_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
