@@ -7,7 +7,7 @@
 3. schema v2 `model_selection.json` 对每个核心小题完成冻结，并通过对应 Evidence Profile。
 4. `review_route.json` 覆盖每问；implementation-assumption check 通过，统计审查未被错误跳过。
 5. Innovation Claim Engine 与论文创新映射通过。
-6. `paper_payload.json` 为 ready，和冻结小题一致，并通过 Presentation Firewall。
+6. schema v2 `paper_payload.json` 为 ready，和冻结小题一致；每问有真实 `validation_anchor`，几何/轨迹/可见性推理已有 `mechanism` 图，并通过 Presentation Firewall。
 7. schema v2 `review_findings.json` 覆盖 scientific、implementation、statistical、uncertainty、claims；critical 已关闭，open major 不超 policy。
 8. 引用、输入、结果和复现台账全部指向实际 artifact 且 hash 匹配。
 9. 所有 blocking task 已完成或有明确、可审计的 waiver。
@@ -33,6 +33,6 @@ python scripts/finalize_submission.py <workspace>
 
 Finalizer 调用专门 validators，验证状态与产物后才进行 submission-mode LaTeX build 和打包。上游阻断时跳过正式构建，防止产生“看起来可提交”的文件。
 
-对 CUMCM，`validate_paper_question_coverage.py` 还会把冻结的核心小题与 `paper/generated/question_sections.tex` 一一对齐：少载、重复载入、章节缺失或仍为草稿均阻断。它只能证明“没有漏掉章节”，不能替代对每问是否真正作答的科学与主张审查。
+对 CUMCM，`validate_paper_question_coverage.py` 还会把冻结的核心小题与 `paper/generated/question_sections.tex` 一一对齐：少载、重复载入、章节缺失、仅有标题或仍为草稿均阻断。它只能证明“没有漏掉章节”，不能替代对每问是否真正作答的科学与主张审查。
 
 只有 `audits/submission/final_report.json` 为 `pass` 时才生成 `submission/submission_manifest.json`。Manifest 保存论文、AI 详情和支撑包的最终 hash。队员仍需逐页查看 PDF、核对上传界面与官方截止时间，并亲自完成提交。

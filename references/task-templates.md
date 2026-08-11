@@ -128,13 +128,13 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 任务说明：只使用通过门禁的结果，不重新计算或发明数字。
 
-先完整读取 `paper-presentation-engine.md`，从通过模型门禁的结果生成 `synthesis/paper_payload.json`。论文手以该 Payload 为主要科学输入，不从 audit prose 复制句子。建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 按其 reasoning path 映射到 semantic requirement 或 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX。
+先完整读取 `paper-presentation-engine.md`，从通过模型门禁的结果生成 schema v2 `synthesis/paper_payload.json`。论文手以该 Payload 为主要科学输入，不从 audit prose 复制句子。每问先填写 `presentation_plan`：把最强验证落到正文真实 `\label`，并裁决是否需要机理/几何直观图；依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系时必须列出图中至少两个关键对象或关系。建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 按其 reasoning path 映射到 semantic requirement 或 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单、空标题或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX；draft 报告为 `review_only`，不得称为最终稿。
 
 ## 科研制图审计
 
 任务说明：有源数据的量化图如已安装则优先使用 `$scipilot-figure-skill`，并可用 `$data-analytics:visualize-data` 做交互探索或第二视角 QA；概念、流程、机理、几何与网络图不调用 SciPilot。任何绘图任务都不得改变数据或模型结果。
 
-逐图记录论点职责、源数据、变换、脚本、解释器/库版本、随机种子、单位、区间定义、输出路径和哈希。量化图执行 `论证目标 → profile_data.py → 图型选择与避坑 → 最终尺寸渲染 → visual_qa.py → AI 读取 PNG → 回改重渲 → export_figure.py → check_figure.py --strict → LaTeX 实页复核`。检查坐标尺度、缺失值、平滑/归一化、误差含义、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出；`check_figure.py` 对字体嵌入只给 warning 时再用 `pdffonts` 核对 `emb=yes`。全局尺度压缩关键结构时改用局部放大、inset 或相对坐标。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/必要 PNG 放入 `paper/figures/`。
+逐图记录论点职责、源数据、变换、脚本、解释器/库版本、随机种子、单位、区间定义、输出路径、论文锚点和哈希。量化图执行 `论证目标 → profile_data.py → 图型选择与避坑 → 最终尺寸渲染 → visual_qa.py → AI 读取 PNG → 回改重渲 → export_figure.py → check_figure.py --strict → LaTeX 实页复核`。机理/几何图改用 TikZ、Matplotlib 3D、Graphviz 或原生代码，并检查关键对象、点/线/面、方向、坐标约定和判据是否能在 10 秒内读懂；结果曲线不能代替空间关系图。检查坐标尺度、缺失值、平滑/归一化、误差含义、颜色冗余、灰度可辨性、最终栏宽字体、裁切和矢量导出；`check_figure.py` 对字体嵌入只给 warning 时再用 `pdffonts` 核对 `emb=yes`。全局尺度压缩关键结构时改用局部放大、inset 或相对坐标。删除装饰性 3D、重复表格、没有正文引用或不能支持论点的图。只把通过审计的 PDF/必要 PNG 放入 `paper/figures/`。
 
 ## LaTeX 与提交包审计
 

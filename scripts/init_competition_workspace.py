@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 10
+WORKFLOW_VERSION = 11
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -412,10 +412,10 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_json_if_missing(
         root / "synthesis" / "paper_payload.json",
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "draft",
             "questions": [],
-            "notes": "Use only contest-native mathematical content when this payload becomes ready.",
+            "notes": "Use contest-native content; make validation judge-visible and register a mechanism visual whenever geometry, trajectory or visibility carries the reasoning.",
         },
     )
     write_json_if_missing(
@@ -584,11 +584,11 @@ def create_workspace(args: argparse.Namespace) -> Path:
                 ["model-freeze", "all", "selection", joined_models, "", "synthesis/model_selection.json", "", "", "select the best validated solution, including the baseline when warranted", "pending", "true", "question-level adaptive evidence profiles, decisions and rejection reasons", ""],
                 ["review-router", "all", "routing", "model-freeze", "", "synthesis/review_route.json", "", "", "route statistical review only where evidence profile requires it", "pending", "true", "review route and implementation-assumption checks", ""],
                 ["reproduction", "all", "reproduction", "model-freeze", "", "audits/reproduction", "", "", "rerun selected solution", "pending", "true", "clean-run report", ""],
-                ["paper-payload", "all", "synthesis", "model-freeze", "", "synthesis/paper_payload.json", "", "", "export scientific content without control-plane prose", "pending", "true", "sanitized question-level paper payload", ""],
+                ["paper-payload", "all", "synthesis", "model-freeze", "", "synthesis/paper_payload.json", "", "", "export scientific content without control-plane prose", "pending", "true", "sanitized payload with visible-validation and mechanism-visual plans", ""],
                 ["paper", "all", "writing", "paper-payload", "", "paper", "", "", "write only from the sanitized payload and verified result/citation identifiers", "pending", "true", "direct-LaTeX contest paper", ""],
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
                 ["scientific-review", "all", "review", "paper;citation-audit;reproduction;review-router", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "routed scientific, implementation, statistical, uncertainty and claim review", ""],
-                ["paper-presentation", "all", "presentation", "scientific-review", "", "audits/presentation", "", "", "keep rigorous control-plane evidence out of contest prose", "pending", "true", "language firewall, precision budget, figure-density and paragraph-value audit", ""],
+                ["paper-presentation", "all", "presentation", "scientific-review", "", "audits/presentation", "", "", "keep rigorous control-plane evidence out of contest prose", "pending", "true", "language firewall, visible validation, mechanism figures, precision and page-value audit", ""],
                 ["submission", "all", "submission", "paper-presentation", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
             ]
         )

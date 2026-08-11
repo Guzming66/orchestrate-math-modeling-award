@@ -19,6 +19,12 @@ ENGINE_BY_COMPETITION = {
     "ICM": "pdflatex",
 }
 PLACEHOLDERS = ("DRAFT TITLE", "DRAFT KEYWORDS", "DRAFT CONTENT", "0000000")
+PLACEHOLDER_PATTERNS = (
+    *( (re.escape(value), value) for value in PLACEHOLDERS ),
+    (r"\b(?:TODO|TBD|PLACEHOLDER)\b", "generic TODO/TBD/PLACEHOLDER marker"),
+    (r"(?:待补充|待填写|待完善|待完成|此处填写|示例内容)", "unfinished Chinese placeholder marker"),
+    (r"\bLorem\s+ipsum\b", "Lorem ipsum placeholder text"),
+)
 INTERNAL_PAPER_PATTERNS = (
     (r"\bartifact_path\b", "internal evidence field artifact_path"),
     (r"\bsha256\b", "internal SHA-256 field"),
@@ -67,6 +73,9 @@ LEAN_PAPER_WARNINGS = (
     (r"充分证明", "calibrate proof language to the available evidence"),
     (r"具有(?:较强|良好)的(?:鲁棒性|稳健性|普适性|适用性)", "replace generic robustness/applicability with a tested boundary"),
     (r"验证了模型的(?:正确性|准确性|有效性)", "name the validation target, metric and observed result"),
+    (r"保守裁决", "state the adopted modeling criterion and its consequence directly"),
+    (r"语义敏感性基线", "use a contest-native criterion comparison instead of internal terminology"),
+    (r"(?:独立复算|区间算术|单调性证书).{0,16}(?:一致|通过|确认)", "show the compared configuration, discrepancy or boundary in the paper"),
 )
 BLOCKING_LOG_PATTERNS = (
     (r"^! LaTeX Error:", "LaTeX error"),
@@ -173,9 +182,17 @@ def strip_tex_comments(text: str) -> str:
     return "\n".join(cleaned)
 
 
+def find_placeholders(text: str) -> list[str]:
+    return sorted(
+        {
+            label
+            for pattern, label in PLACEHOLDER_PATTERNS
+            if re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
+        }
+    )
+
+
 def scan_sources(paper_dir: Path, mode: str) -> tuple[list[str], list[str]]:
-    if mode != "submission":
-        return [], []
     errors: list[str] = []
     warnings: list[str] = []
     for path in paper_dir.rglob("*"):
@@ -185,16 +202,18 @@ def scan_sources(paper_dir: Path, mode: str) -> tuple[list[str], list[str]]:
         if "build" in relative.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        for placeholder in PLACEHOLDERS:
-            if placeholder in text:
-                errors.append(f"placeholder '{placeholder}' remains in {relative}")
+        visible = strip_tex_comments(text) if path.suffix.lower() == ".tex" else text
+        placeholder_target = errors if mode == "submission" else warnings
+        for placeholder in find_placeholders(visible):
+            qualifier = "remains" if mode == "submission" else "marks this build as review-only"
+            placeholder_target.append(f"placeholder '{placeholder}' {qualifier} in {relative}")
 
         if "sections" not in relative.parts:
             continue
-        visible = strip_tex_comments(text)
+        internal_target = errors if mode == "submission" else warnings
         for pattern, message in INTERNAL_PAPER_PATTERNS:
             if re.search(pattern, visible, flags=re.IGNORECASE | re.MULTILINE):
-                errors.append(f"{message} leaked into final paper source: {relative}")
+                internal_target.append(f"{message} leaked into paper source: {relative}")
         for pattern, message in LEAN_PAPER_WARNINGS:
             if re.search(pattern, visible, flags=re.MULTILINE):
                 warnings.append(f"{message}: {relative}")
@@ -356,6 +375,8 @@ def main() -> int:
     report = {
         "status": "pass" if not errors else "block",
         "mode": args.mode,
+        "release_class": "submission_candidate" if args.mode == "submission" else "review_only",
+        "submission_eligible": args.mode == "submission" and not errors,
         "competition": args.competition,
         "engine": engine,
         "source": str(main_path),

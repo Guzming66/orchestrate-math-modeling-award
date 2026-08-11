@@ -1,6 +1,6 @@
 # 证据门禁
 
-v9 不再维护重复的 G0—G7 人工总表。每类判断由最接近证据的 validator 负责，Scientific Review Engine 统一收集需要人类判断的发现，finalizer 只汇总验证状态与真实产物。
+v11 不维护重复的 G0—G7 人工总表。每类判断由最接近证据的 validator 负责，Scientific Review Engine 统一收集需要人类判断的发现，finalizer 只汇总验证状态与真实产物。
 
 ## 硬阻断
 
@@ -15,7 +15,9 @@ v9 不再维护重复的 G0—G7 人工总表。每类判断由最接近证据�
 - 独立审查仍有 unresolved critical，或 open major 超过 policy；
 - 摘要、正文或结论出现无法映射到结果/文献/innovation claim 的强主张；
 - `paper_payload.json` 与冻结小题不一致，或 Payload/正文泄漏 freeze、验收、hash、audit/review status、claim status 等内部元语言；
-- CUMCM 冻结的小题没有与非空 LaTeX 小题章节一一对应；
+- 每问没有把最强验证映射到正文真实 `validation_anchor`，或只声称复算/证书/稳健而不给评委可核验的比较、误差或边界；
+- 依赖几何、轨迹、视线或可见性推理的小题没有登记并呈现 `mechanism` 直观图；
+- CUMCM 冻结的小题没有与含实质内容的 LaTeX 小题章节一一对应，或仍含占位符/仅有标题；
 - profile 要求的产物缺失、归档路径错误、匿名/凭据扫描失败；
 - LaTeX 构建、页数/纸张/大小或最终 hash 检查失败。
 

@@ -8,10 +8,15 @@ import json
 import re
 from pathlib import Path
 
-from build_latex import strip_tex_comments
+from build_latex import find_placeholders, strip_tex_comments
 
 
 INPUT_PATTERN = re.compile(r"\\input\{(sections/questions/[^}]+)\}")
+HEADING_PATTERN = re.compile(r"\\(?:section|subsection|subsubsection|paragraph)\*?\{[^{}]*\}")
+NONCONTENT_PATTERN = re.compile(
+    r"\\(?:label|index|addcontentsline)\{[^{}]*\}"
+    r"|\\(?:clearpage|newpage|pagebreak|medskip|smallskip|bigskip)\b"
+)
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -20,6 +25,12 @@ def load_json(path: Path) -> dict[str, object]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def has_substantive_tex_content(visible: str) -> bool:
+    without_headings = HEADING_PATTERN.sub("", visible)
+    without_bookkeeping = NONCONTENT_PATTERN.sub("", without_headings)
+    return bool(re.sub(r"[\s{}~]+", "", without_bookkeeping))
 
 
 def validate_paper_question_coverage(workspace: Path) -> dict[str, object]:
@@ -63,7 +74,10 @@ def validate_paper_question_coverage(workspace: Path) -> dict[str, object]:
         except OSError:
             errors.append(f"question section is missing: {relative}")
             continue
-        if "DRAFT CONTENT" in visible or not visible.strip():
+        placeholders = find_placeholders(visible)
+        if placeholders:
+            errors.append(f"question section still contains placeholder(s) {', '.join(placeholders)}: {relative}")
+        if not has_substantive_tex_content(visible):
             errors.append(f"question section is empty or still a draft: {relative}")
         if not re.search(r"\\(?:section|subsection)\*?\{", visible):
             warnings.append(f"question section has no visible heading: {relative}")

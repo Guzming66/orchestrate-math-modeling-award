@@ -1,4 +1,4 @@
 interface:
   display_name: "数学建模竞赛总控"
-  short_description: "逐问建模、创新证据、适应性审查与 LaTeX 终审总控"
-  default_prompt: "使用 $orchestrate-math-modeling 按小题完成证据化建模、审查、LaTeX 写作与提交终检。"
+  short_description: "逐问建模、可见验证、几何图解与 LaTeX 终审总控"
+  default_prompt: "使用 $orchestrate-math-modeling 按小题完成证据化建模，把验证和几何关系转成评委可核验的 LaTeX 论文并执行提交终检。"

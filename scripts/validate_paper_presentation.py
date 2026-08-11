@@ -43,12 +43,24 @@ QUESTION_KEYS = {
     "question_id", "evidence_profile", "problem_summary", "assumptions", "core_model",
     "derivation_summary", "algorithm_summary", "key_results", "comparison_summary",
     "validation_summary", "sensitivity_and_limits", "precision_policy", "complexity_value",
-    "paper_section", "figures", "citations",
+    "presentation_plan", "paper_section", "figures", "citations",
 }
 PRECISION_KEYS = {"display_rule", "justification", "dominant_uncertainty"}
 COMPLEXITY_KEYS = {"mode", "added_complexity", "structural_need", "incremental_gain", "decision"}
-FIGURE_KEYS = {"path", "role", "supported_claim", "source_data", "generator"}
+PRESENTATION_KEYS = {
+    "validation_form", "validation_anchor", "validation_takeaway", "mechanism_visual",
+    "mechanism_visual_reason", "mechanism_visual_must_show",
+}
+FIGURE_KEYS = {"path", "role", "supported_claim", "source_data", "generator", "paper_anchor"}
 COMPLEXITY_MODES = {"no_extra_complexity", "semantics_required", "incremental_change"}
+VALIDATION_FORMS = {"prose", "equation", "table", "figure"}
+MECHANISM_VISUAL_MODES = {"required", "not_applicable"}
+GEOMETRY_SIGNAL = re.compile(
+    r"空间几何|几何关系|视线|遮蔽|可见(?:性|区域)|投影|碰撞|相交|坐标系|轨迹"
+    r"|line[ -]of[ -]sight|spatial geometry|visibility|occlusion|projection|collision"
+    r"|intersection|coordinate system|trajectory",
+    re.IGNORECASE,
+)
 
 
 def load(path: Path) -> dict[str, object]:
@@ -61,6 +73,10 @@ def load(path: Path) -> dict[str, object]:
 
 def nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def latex_label_exists(source_text: str, label: str) -> bool:
+    return bool(label) and re.search(r"\\label\s*\{\s*" + re.escape(label) + r"\s*\}", source_text) is not None
 
 
 def reject_unknown(mapping: dict[str, object], allowed: set[str], location: str, errors: list[str]) -> None:
@@ -91,9 +107,14 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
     selection = load(workspace / "synthesis" / "model_selection.json")
     errors: list[str] = []
     warnings: list[str] = []
+    paper_root = workspace / "paper"
+    paper_source_text = "\n".join(
+        strip_tex_comments(path.read_text(encoding="utf-8", errors="replace"))
+        for path in paper_root.rglob("*.tex") if "build" not in path.relative_to(paper_root).parts
+    ) if paper_root.is_dir() else ""
 
-    if payload.get("schema_version") != 1:
-        errors.append("paper_payload.json schema_version must be 1")
+    if payload.get("schema_version") != 2:
+        errors.append("paper_payload.json schema_version must be 2")
     if payload.get("status") != "ready":
         errors.append("paper payload is not ready")
     ready = payload.get("status") == "ready"
@@ -139,6 +160,9 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
         complexity = item.get("complexity_value")
         if isinstance(complexity, dict):
             reject_unknown(complexity, COMPLEXITY_KEYS, f"{label}.complexity_value", errors)
+        presentation = item.get("presentation_plan")
+        if isinstance(presentation, dict):
+            reject_unknown(presentation, PRESENTATION_KEYS, f"{label}.presentation_plan", errors)
         figures = item.get("figures", [])
         if isinstance(figures, list):
             for figure_index, figure in enumerate(figures, start=1):
@@ -190,6 +214,40 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
             elif mode in {"no_extra_complexity", "semantics_required"} and gain is not None and not isinstance(gain, str):
                 errors.append(f"{label}: complexity_value.incremental_gain must be text or null")
 
+        visual_mode = ""
+        if not isinstance(presentation, dict):
+            errors.append(f"{label}: presentation_plan is missing")
+        else:
+            validation_form = str(presentation.get("validation_form", "")).strip().lower()
+            validation_anchor = str(presentation.get("validation_anchor", "")).strip()
+            visual_mode = str(presentation.get("mechanism_visual", "")).strip().lower()
+            if validation_form not in VALIDATION_FORMS:
+                errors.append(f"{label}: presentation_plan.validation_form is invalid")
+            if not nonempty(presentation.get("validation_takeaway")):
+                errors.append(f"{label}: presentation_plan.validation_takeaway is empty")
+            if not validation_anchor:
+                errors.append(f"{label}: presentation_plan.validation_anchor is empty")
+            elif not latex_label_exists(paper_source_text, validation_anchor):
+                errors.append(f"{label}: validation_anchor is not present in paper LaTeX: {validation_anchor}")
+            if visual_mode not in MECHANISM_VISUAL_MODES:
+                errors.append(f"{label}: presentation_plan.mechanism_visual is invalid")
+            if not nonempty(presentation.get("mechanism_visual_reason")):
+                errors.append(f"{label}: presentation_plan.mechanism_visual_reason is empty")
+            must_show = presentation.get("mechanism_visual_must_show")
+            if not isinstance(must_show, list) or not all(nonempty(value) for value in must_show):
+                errors.append(f"{label}: presentation_plan.mechanism_visual_must_show is invalid")
+                must_show = []
+            if visual_mode == "required" and len(must_show) < 2:
+                errors.append(f"{label}: a required mechanism visual must name at least two objects or relations to show")
+            if visual_mode == "not_applicable" and must_show:
+                errors.append(f"{label}: mechanism_visual_must_show must be empty when the visual is not applicable")
+
+        geometry_text = " ".join(
+            str(item.get(field, "")) for field in ("problem_summary", "core_model", "derivation_summary")
+        )
+        if GEOMETRY_SIGNAL.search(geometry_text) and visual_mode != "required":
+            errors.append(f"{label}: geometry/trajectory/visibility reasoning requires a mechanism visual")
+
         section_rel = str(item.get("paper_section", "")).replace("\\", "/").strip()
         section = (workspace / section_rel).resolve()
         try:
@@ -203,17 +261,23 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
         if not isinstance(figures, list):
             errors.append(f"{label}: figures is not an array")
             figures = []
+        mechanism_figure_count = 0
         for figure_index, figure in enumerate(figures, start=1):
             figure_label = f"{label}/figure[{figure_index}]"
             if not isinstance(figure, dict):
                 errors.append(f"{figure_label} is invalid")
                 continue
-            for field in ("path", "role", "supported_claim", "source_data", "generator"):
+            for field in ("path", "role", "supported_claim", "source_data", "generator", "paper_anchor"):
                 if not nonempty(figure.get(field)):
                     errors.append(f"{figure_label}: {field} is empty")
             role = str(figure.get("role", "")).strip().lower()
             if role not in FIGURE_ROLES:
                 errors.append(f"{figure_label}: invalid evidence role")
+            elif role == "mechanism":
+                mechanism_figure_count += 1
+            paper_anchor = str(figure.get("paper_anchor", "")).strip()
+            if paper_anchor and not latex_label_exists(paper_source_text, paper_anchor):
+                errors.append(f"{figure_label}: paper_anchor is not present in paper LaTeX: {paper_anchor}")
             figure_rel = str(figure.get("path", "")).replace("\\", "/").strip()
             figure_path = (workspace / figure_rel).resolve()
             try:
@@ -224,6 +288,8 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
                 if not figure_path.is_file():
                     errors.append(f"{figure_label}: figure file is missing")
             figure_count += 1
+        if visual_mode == "required" and mechanism_figure_count == 0:
+            errors.append(f"{label}: required mechanism visual is not registered in figures")
 
     if set(expected_profiles) != seen:
         missing = set(expected_profiles) - seen

@@ -104,6 +104,18 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(any("tested boundary" in item for item in warnings))
             self.assertTrue(any("full code listing" in item for item in warnings))
 
+    def test_draft_source_audit_marks_placeholders_as_review_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            paper = Path(temporary)
+            sections = paper / "sections"
+            sections.mkdir()
+            (sections / "q01.tex").write_text("\\section{问题一}\n待补充验证表。\n", encoding="utf-8")
+            errors, warnings = scan_sources(paper, "draft")
+            self.assertEqual(errors, [])
+            self.assertTrue(any("review-only" in item for item in warnings))
+            errors, _ = scan_sources(paper, "submission")
+            self.assertTrue(any("placeholder" in item for item in errors))
+
     def test_cumcm_initializer_uses_lean_question_level_latex_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -144,6 +156,11 @@ class WorkflowTests(unittest.TestCase):
             )
             report = validate_paper_question_coverage(root)
             self.assertEqual(report["status"], "pass")
+
+            (question_dir / "q02.tex").write_text("\\section{问题二}\n", encoding="utf-8")
+            report = validate_paper_question_coverage(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("empty or still a draft" in item for item in report["errors"]))
 
     def complete_profile(self, root: Path, competition: str = "CUMCM") -> None:
         source = self.make_artifact(root, "audits/rules/official-rules.html")
@@ -378,7 +395,9 @@ class WorkflowTests(unittest.TestCase):
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 10)
+            self.assertEqual(manifest["workflow_version"], 11)
+            payload = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["schema_version"], 2)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["branches"], ["model-a"])
             self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
@@ -576,7 +595,7 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 10)
+            self.assertEqual(manifest["workflow_version"], 11)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["innovation_mode"], "standard")
             profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
@@ -635,6 +654,48 @@ class WorkflowTests(unittest.TestCase):
                 "not_reviewed",
             )
             self.assertTrue((root / "innovation" / "semantic_fidelity_map.md").is_file())
+
+    def test_v10_migration_preserves_scientific_state_and_reopens_presentation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for relative in ("innovation", "compliance", "synthesis", "shared", "audits"):
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            (root / "competition_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 10,
+                        "workflow_version": 10,
+                        "competition": "CUMCM",
+                        "year": 2026,
+                        "branches": ["model-a"],
+                        "innovation_mode": "standard",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            model = {"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "analytical"}]}
+            review = {"schema_version": 2, "status": "reviewed", "policy": {"max_open_major": 1}, "coverage": [], "findings": []}
+            payload = {
+                "schema_version": 1,
+                "status": "ready",
+                "questions": [{"question_id": "Q1", "figures": []}],
+            }
+            (root / "synthesis" / "model_selection.json").write_text(json.dumps(model), encoding="utf-8")
+            (root / "audits" / "review_findings.json").write_text(json.dumps(review), encoding="utf-8")
+            (root / "synthesis" / "paper_payload.json").write_text(json.dumps(payload), encoding="utf-8")
+            (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
+
+            report = migrate(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
+            self.assertEqual(json.loads((root / "synthesis" / "model_selection.json").read_text(encoding="utf-8")), model)
+            self.assertEqual(json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8")), review)
+            migrated = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schema_version"], 2)
+            self.assertEqual(migrated["status"], "draft")
+            self.assertEqual(migrated["questions"][0]["presentation_plan"]["mechanism_visual"], "pending")
+            self.assertTrue((root / "synthesis" / "paper_payload_v10.json").is_file())
+            manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["workflow_version"], 11)
 
     def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -861,7 +922,7 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "draft",
                 "questions": [
                     {
@@ -902,12 +963,17 @@ class WorkflowTests(unittest.TestCase):
             root = Path(temp)
             self.initialize(root)
             section = root / "paper" / "sections" / "questions" / "q01.tex"
-            section.write_text("\\section{问题一}\\n由守恒关系建立最小费用流模型，并在边界情形下验证可行性。\\n", encoding="utf-8")
+            section.write_text(
+                "\\section{问题一}\\label{sec:q1}\\n"
+                "由守恒关系建立最小费用流模型。\\subsection{验证}\\label{sec:q1-validation}\\n"
+                "小规模枚举与网络流结果一致。\\n",
+                encoding="utf-8",
+            )
             (root / "synthesis" / "model_selection.json").write_text(
                 json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "optimization"}]}), encoding="utf-8"
             )
             payload = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "ready",
                 "questions": [
                     {
@@ -935,6 +1001,14 @@ class WorkflowTests(unittest.TestCase):
                             "incremental_gain": None,
                             "decision": "保留最小费用流模型",
                         },
+                        "presentation_plan": {
+                            "validation_form": "prose",
+                            "validation_anchor": "sec:q1-validation",
+                            "validation_takeaway": "小规模枚举与网络流结果一致",
+                            "mechanism_visual": "not_applicable",
+                            "mechanism_visual_reason": "本问的核心是代数守恒与容量约束，不依赖空间几何关系",
+                            "mechanism_visual_must_show": [],
+                        },
                         "figures": [],
                     }
                 ],
@@ -956,6 +1030,84 @@ class WorkflowTests(unittest.TestCase):
             report = validate_paper_presentation(root)
             self.assertEqual(report["status"], "block")
             self.assertTrue(any("leaked into final paper" in item for item in report["errors"]))
+
+    def test_geometry_reasoning_requires_registered_mechanism_visual(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            section = root / "paper" / "sections" / "questions" / "q01.tex"
+            section.write_text(
+                "\\section{问题一}\\label{sec:q1}\n"
+                "\\begin{figure}\\input{figures/q1_geometry.tex}\\caption{视线遮蔽几何关系}"
+                "\\label{fig:q1-geometry}\\end{figure}\n"
+                "\\subsection{验证}\\label{sec:q1-validation}\n加密计算与解析边界的差异小于 $10^{-4}$ s。\n",
+                encoding="utf-8",
+            )
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "deterministic_numerical"}]}),
+                encoding="utf-8",
+            )
+            question = {
+                "question_id": "Q1",
+                "evidence_profile": "deterministic_numerical",
+                "problem_summary": "计算导弹视线被球形云团遮蔽的持续时间",
+                "assumptions": ["各物体按题意给定轨迹运动"],
+                "core_model": "计算云团中心到导弹—圆柱视线段的最远距离",
+                "derivation_summary": "在统一坐标系中由轨迹和相交判据得到遮蔽裕度",
+                "algorithm_summary": "确定性扫描后对边界时刻二分加密",
+                "key_results": ["有效遮蔽持续 1.39 s"],
+                "comparison_summary": "与目标中心线简化判据比较，入界时刻推迟 0.04 s",
+                "validation_summary": "加密计算与解析边界差异小于 10^{-4} s",
+                "sensitivity_and_limits": "结论适用于题面给定的球形云团与直线轨迹",
+                "precision_policy": {
+                    "display_rule": "正文报告到 0.01 s",
+                    "justification": "更高位数小于判据口径差异",
+                    "dominant_uncertainty": "遮蔽判据口径",
+                },
+                "complexity_value": {
+                    "mode": "semantics_required",
+                    "added_complexity": "完整圆柱边界",
+                    "structural_need": "题面目标具有有限尺寸",
+                    "incremental_gain": None,
+                    "decision": "保留完整圆柱判据",
+                },
+                "presentation_plan": {
+                    "validation_form": "prose",
+                    "validation_anchor": "sec:q1-validation",
+                    "validation_takeaway": "边界时刻达到正文显示精度",
+                    "mechanism_visual": "required",
+                    "mechanism_visual_reason": "遮蔽判据依赖导弹、云团、圆柱和视线的空间关系",
+                    "mechanism_visual_must_show": ["导弹—圆柱视线段", "云团球与遮蔽锥"],
+                },
+                "paper_section": "paper/sections/questions/q01.tex",
+                "figures": [],
+                "citations": [],
+            }
+            (root / "synthesis" / "paper_payload.json").write_text(
+                json.dumps({"schema_version": 2, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            report = validate_paper_presentation(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("mechanism visual" in item for item in report["errors"]))
+
+            figure = root / "paper" / "figures" / "q1_geometry.tex"
+            figure.write_text("% reproducible TikZ geometry source\n", encoding="utf-8")
+            question["figures"] = [
+                {
+                    "path": "paper/figures/q1_geometry.tex",
+                    "role": "mechanism",
+                    "supported_claim": "说明完整圆柱遮蔽判据中的对象与空间关系",
+                    "source_data": "题面坐标、云团半径和轨迹方程",
+                    "generator": "TikZ",
+                    "paper_anchor": "fig:q1-geometry",
+                }
+            ]
+            (root / "synthesis" / "paper_payload.json").write_text(
+                json.dumps({"schema_version": 2, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            self.assertEqual(validate_paper_presentation(root)["status"], "pass")
 
     def test_faithful_formulation_claim_can_pass_without_baseline_failure_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

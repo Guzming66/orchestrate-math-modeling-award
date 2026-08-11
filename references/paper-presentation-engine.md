@@ -7,9 +7,10 @@
 3. 竞赛原生语言
 4. 段落价值与篇幅
 5. 数值精度预算
-6. 算法与复杂度价值
-7. 图表信息密度
-8. 摘要和终审
+6. 评委可见验证
+7. 算法与复杂度价值
+8. 图表信息密度
+9. 摘要和终审
 
 ## 三层隔离
 
@@ -39,6 +40,7 @@
 - `sensitivity_and_limits`
 - `precision_policy`
 - `complexity_value`
+- `presentation_plan`
 - `paper_section`
 - `figures`
 - `citations`
@@ -46,6 +48,8 @@
 字段是科学载荷，不是强制论文小节。`algorithm_summary` 对解析推导可留空；其他 Profile 记录实际求解或估计过程。`comparison_summary` 没有材料性比较时可留空，但必须由评审确认删去不会改变论证。`complexity_value.mode` 只用 `no_extra_complexity / semantics_required / incremental_change`：前两类允许 `incremental_gain=null`，不得为题意直接规定的边界、容量或守恒约束编造“增益”；只有保留可选增量组件时才必须填写可验证增益。不要求机械地在正文生成一张表。
 
 Payload 禁止出现 `workflow_stage`、freeze、acceptance、review/claim status、artifact/hash、audit path、task board 或 reproduction command。证据身份仍由外部台账核验，不复制到 Payload。
+
+`presentation_plan` 不保存内部命令，只规定评委在纸面能看到什么：`validation_form` 选择段落、式、表或图，`validation_anchor` 指向论文中真实存在的 LaTeX 标签，`validation_takeaway` 写出该证据允许得出的结论；`mechanism_visual` 裁决是否需要直观机理图。依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系的小题必须选 `required`，并在 `mechanism_visual_must_show` 列出至少两个必须同时呈现的对象或关系。
 
 ## 竞赛原生语言
 
@@ -90,6 +94,12 @@ Payload 禁止出现 `workflow_stage`、freeze、acceptance、review/claim statu
 
 禁止以无意义小数制造可靠感。先对不确定性取合理有效数字，再把结果舍入到同一数量级。
 
+## 评委可见验证
+
+内部验证只有转成评委能现场核验的证据，才能进入论文论证。每问至少选择一种最短充分形式：解析题给关键引理或边界式；确定性数值题给容差、加密/交叉求解与差异；优化题给可行性、基准值或独立搜索结果；统计/机器学习题给数据划分、指标与区间；模拟题给收敛、重复和随机误差。不要只写“独立复算一致”“区间证书通过”“结果稳定”，而不报告比较对象、配置、误差或适用边界。
+
+优先用一张小表、一个诊断图或两三句带数值的文字完成验证，不为每项内部检查制造新章节。`validation_anchor` 必须是正文、表、图或公式的真实 `\label`；验证材料较多时正文保留结论所需的最小证据，其余进入 profile 允许的支撑材料。
+
 ## 算法与复杂度价值
 
 复杂度分析只有在解释可计算性、规模上限或方法选择时进入正文。不得用一个抽象 `O(·)` 替代真实算法配置。
@@ -108,6 +118,8 @@ Payload 禁止出现 `workflow_stage`、freeze、acceptance、review/claim statu
 先按图的数学对象分流：有源数据的折线、散点、分布、比较、误差、不确定性、热力图、诊断图和多面板结果图优先调用 `$scipilot-figure-skill`；机理、几何、流程、网络和算法示意图不交给 SciPilot，使用可复现 TikZ/Graphviz/原生代码。`$data-analytics:visualize-data` 可用于交互探索、通用设计和第二视角 QA，但不替代 SciPilot 的数据剖析与成图闭环。SciPilot 不可用时，按同一契约直接使用 Matplotlib/Seaborn。
 
 每图先写图表契约：分析问题、主要证据职责、源数据、编码、单位/区间、最终尺寸、输出路径和灰度区分。证据职责仅用 `mechanism / data / diagnostic / decision`。
+
+几何直观图不是装饰：当关键公式描述空间位置、视线段、遮蔽锥、轨迹交点、投影边界或可行区域时，先画一幅 `mechanism` 图，再进入符号和推导。图中必须同时标出参与判据的对象、关键点/线/面、方向或时间关系、坐标/尺度约定，并让读者从图直接看出公式在判断什么。避免透视造成假交点、把不共面的对象画成相交、比例失真而不注明“示意”或用装饰性 3D 代替关系表达。几何图用可复现 TikZ、Matplotlib 3D、Graphviz 或原生代码，不调用 SciPilot；随后仍在最终 LaTeX 尺寸检查字体、线型、箭头、标签遮挡和灰度辨识。
 
 量化图依次执行：确认本图要证明的论文主张 → `profile_data.py` 剖析字段、样本量、缺失、分布、异常和分组 → 给出首选图及理由并拦截误导性图型 → 按论文最终栏宽渲染 → `visual_qa.py` 检查缺字、裁切和刻度重叠 → 读取 PNG 预览检查图例遮盖、面板对齐、灰度区分和数据完整性 → 修正并重渲，最多三轮仍失败则拆图或重选图型 → 通过后运行 `export_figure.py` 与 `check_figure.py --strict` 导出 PDF/必要的 PNG。先用布局工具解决边界，再以 `tight=False` 导出正式 PDF，避免 `bbox_inches='tight'` 改变声明的最终物理尺寸；紧边界 PNG 只作预览。每轮从绘图源代码修改，不在预览图上手工修图。
 

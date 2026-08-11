@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "workflow_version": 10,
+  "workflow_version": 11,
   "python_minimum": "3.10",
   "companion_skills": [
     {

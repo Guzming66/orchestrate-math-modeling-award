@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v1.schema.json",
+  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v2.schema.json",
   "title": "Sanitized contest-paper scientific payload",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "status", "questions"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "status": {"enum": ["draft", "ready"]},
     "notes": {"type": "string"},
     "questions": {
@@ -17,7 +17,7 @@
         "required": [
           "question_id", "evidence_profile", "problem_summary", "assumptions", "core_model",
           "derivation_summary", "key_results", "validation_summary", "sensitivity_and_limits",
-          "precision_policy", "complexity_value", "paper_section", "figures"
+          "precision_policy", "complexity_value", "presentation_plan", "paper_section", "figures"
         ],
         "properties": {
           "question_id": {"type": "string", "minLength": 1},
@@ -61,19 +61,36 @@
               }
             ]
           },
+          "presentation_plan": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "validation_form", "validation_anchor", "validation_takeaway", "mechanism_visual",
+              "mechanism_visual_reason", "mechanism_visual_must_show"
+            ],
+            "properties": {
+              "validation_form": {"enum": ["pending", "prose", "equation", "table", "figure"]},
+              "validation_anchor": {"type": "string"},
+              "validation_takeaway": {"type": "string"},
+              "mechanism_visual": {"enum": ["pending", "required", "not_applicable"]},
+              "mechanism_visual_reason": {"type": "string", "minLength": 1},
+              "mechanism_visual_must_show": {"type": "array", "items": {"type": "string", "minLength": 1}}
+            }
+          },
           "paper_section": {"type": "string", "minLength": 1},
           "figures": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["path", "role", "supported_claim", "source_data", "generator"],
+              "required": ["path", "role", "supported_claim", "source_data", "generator", "paper_anchor"],
               "properties": {
                 "path": {"type": "string", "minLength": 1},
                 "role": {"enum": ["mechanism", "data", "diagnostic", "decision"]},
                 "supported_claim": {"type": "string", "minLength": 1},
                 "source_data": {"type": "string", "minLength": 1},
-                "generator": {"type": "string", "minLength": 1}
+                "generator": {"type": "string", "minLength": 1},
+                "paper_anchor": {"type": "string", "minLength": 1}
               }
             }
           },
