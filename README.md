@@ -2,7 +2,7 @@
 
 面向 CUMCM 国赛与 MCM/ICM 美赛的证据驱动总控。它协调逐问建模、创新主张、引用核验、复现、独立审查、LaTeX 写作和最终提交；不预测或保证奖项。
 
-## v12 的六个核心系统
+## v13 的七个核心系统
 
 1. Rule Engine：只执行带生效时间、官方来源与哈希的赛事规则档案。
 2. Model Selection Engine：按小题选择 Evidence Profile，以强基线和可复核证据决定方案。
@@ -10,6 +10,7 @@
 4. Scientific Review Engine：按题型路由科学、实现、统计、不确定性和主张审查。
 5. Contest Paper Presentation Engine：用 Paper Payload 隔离内部控制语言，要求验证在纸面可核验，为几何、轨迹与可见性推理提供直观机理图，并让逐问独立稿执行与主论文相同的语言、证据和版面门禁。
 6. Submission Finalizer：编译、渲染、交叉核对并按已核验规则执行 fail-closed 终审。
+7. Paper Integrity Engine：检查论文接缝、公式—代码—结果追踪、AI 使用双向覆盖，并对本地优秀论文与固定模板执行可解释的相似度预检。
 
 工作流采用五个阶段：`rule_verification → exploration → model_freeze → paper_freeze → submission`。默认使用 `standard`；`championship` 加强独立审查与稳健性，但不强制增加模型、统计段落或计算量。
 

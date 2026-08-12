@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Migrate v8-v11 workspaces to v12 question-local answer/evidence schemas."""
+"""Migrate v8-v12 workspaces to v13 integrity and reverse-coverage schemas."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-TARGET_VERSION = 12
+TARGET_VERSION = 13
 
 
 def load(path: Path) -> dict[str, object]:
@@ -58,7 +58,7 @@ def v8_profile(manifest: dict[str, object]) -> dict[str, object]:
     main_document = Path(str(manifest.get("paper_source", "paper/main.tex"))).name
     return {
         "schema_version": 2,
-        "profile_id": f"{manifest.get('competition', '')}-{manifest.get('year', '')}-v12-migrated-unverified",
+        "profile_id": f"{manifest.get('competition', '')}-{manifest.get('year', '')}-v13-migrated-unverified",
         "competition": manifest.get("competition", ""),
         "edition": str(manifest.get("year", "")),
         "status": "unverified",
@@ -90,7 +90,7 @@ def v8_profile(manifest: dict[str, object]) -> dict[str, object]:
     }
 
 
-def write_v12_task_board(workspace: Path, version: int) -> None:
+def write_v13_task_board(workspace: Path, version: int) -> None:
     path = workspace / "shared" / "task_board.csv"
     backup(path, version)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,9 @@ def write_v12_task_board(workspace: Path, version: int) -> None:
         ["paper", "writing", "paper-payload", "paper", "write only verified scientific content", "direct-LaTeX paper", "pending", "true"],
         ["scientific-review", "review", "paper;review-router", "audits/review_findings.json", "repair or weaken unsupported claims", "routed independent review", "pending", "true"],
         ["paper-presentation", "presentation", "scientific-review", "audits/presentation", "keep audit language internal", "presentation firewall, visible validation and mechanism-visual audit", "pending", "true"],
-        ["submission", "submission", "paper-presentation", "submission", "do not submit", "verified profile-required artifacts", "pending", "true"],
+        ["paper-integrity", "integrity", "paper-presentation", "audits/integrity", "repair prose and implementation seams", "chat-residue, repeated-template and equation-code-result audit", "pending", "true"],
+        ["similarity-precheck", "similarity", "paper-integrity", "audits/similarity", "rewrite copied or template-derived prose", "local overlap report with human-review locations", "pending", "true"],
+        ["submission", "submission", "similarity-precheck", "submission", "do not submit", "verified profile-required artifacts", "pending", "true"],
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
@@ -119,7 +121,7 @@ def migrate(workspace: Path) -> dict[str, object]:
     current = manifest.get("workflow_version")
     if current == TARGET_VERSION:
         return {"status": "pass", "from_version": current, "to_version": TARGET_VERSION, "errors": [], "warnings": ["workspace is already current"]}
-    if current not in {8, 9, 10, 11}:
+    if current not in {8, 9, 10, 11, 12}:
         return {
             "status": "block",
             "from_version": current,
@@ -159,7 +161,7 @@ def migrate(workspace: Path) -> dict[str, object]:
             payload_path,
             {"schema_version": 3, "status": "draft", "questions": []},
         )
-    else:
+    elif source_version in {10, 11}:
         backup(payload_path, source_version)
         payload = load(payload_path)
         questions = payload.get("questions")
@@ -189,6 +191,8 @@ def migrate(workspace: Path) -> dict[str, object]:
         payload["questions"] = questions
         write_json(payload_path, payload)
         warnings.append(f"v{source_version} paper payload was preserved but reset to draft for question-local answer, validation and mechanism-visual planning")
+    else:
+        warnings.append("v12 scientific and paper-payload state was preserved; only v13 integrity records were added")
     mode = str(manifest.get("innovation_mode", "standard"))
     if mode == "fast":
         mode = "standard"
@@ -235,7 +239,28 @@ def migrate(workspace: Path) -> dict[str, object]:
         workspace / "synthesis" / "innovation_claims.csv",
         ["reasoning_path", "semantic_requirement"],
     )
-    write_v12_task_board(workspace, source_version)
+    for relative in ("audits/integrity", "audits/similarity/corpus"):
+        (workspace / relative).mkdir(parents=True, exist_ok=True)
+    for relative, fields in (
+        (
+            "compliance/ai_artifact_inventory.csv",
+            ["artifact_id", "artifact_type", "relative_path", "ai_used", "use_ids", "human_verification", "sha256", "reviewer", "checked_at", "notes"],
+        ),
+        (
+            "synthesis/implementation_trace.csv",
+            ["trace_id", "question_id", "paper_section", "equation_or_claim_anchor", "mathematical_role", "implementation_path", "implementation_symbol", "test_artifact_path", "test_sha256", "test_command", "result_ids", "reviewer", "checked_at", "notes"],
+        ),
+        (
+            "audits/similarity/reference_corpus.csv",
+            ["source_id", "source_type", "text_path", "sha256", "status", "notes"],
+        ),
+    ):
+        path = workspace / relative
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("w", encoding="utf-8-sig", newline="") as handle:
+                csv.writer(handle).writerow(fields)
+    write_v13_task_board(workspace, source_version)
 
     manifest["schema_version"] = TARGET_VERSION
     manifest["workflow_version"] = TARGET_VERSION
@@ -244,7 +269,8 @@ def migrate(workspace: Path) -> dict[str, object]:
     manifest["competition_profile"] = "compliance/competition_profile.json"
     write_json(manifest_path, manifest)
     if source_version in {8, 9}:
-        warnings.append(f"v{source_version} model-selection and review records were preserved but reset for v12 adaptive schemas")
+        warnings.append(f"v{source_version} model-selection and review records were preserved but reset for adaptive schemas")
+    warnings.append("AI artifact inventory, implementation trace and similarity corpus require human population before submission")
     report = {
         "status": "pass",
         "from_version": source_version,
@@ -253,12 +279,12 @@ def migrate(workspace: Path) -> dict[str, object]:
         "errors": [],
         "warnings": warnings,
     }
-    write_json(workspace / "audits" / f"migration_v{source_version}_to_v12.json", report)
+    write_json(workspace / "audits" / f"migration_v{source_version}_to_v13.json", report)
     return report
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Migrate a v8-v11 competition workspace to v12.")
+    parser = argparse.ArgumentParser(description="Migrate a v8-v12 competition workspace to v13.")
     parser.add_argument("workspace")
     args = parser.parse_args()
     report = migrate(Path(args.workspace).expanduser())

@@ -26,8 +26,10 @@ from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
 from validate_paper_presentation import validate_paper_presentation
 from validate_paper_question_coverage import validate_paper_question_coverage
+from validate_paper_integrity import validate_paper_integrity
 from validate_review_findings import validate_review_findings
 from validate_review_route import validate_review_route
+from validate_similarity_precheck import validate_similarity_precheck
 from validate_task_board import validate_task_board
 from audit_cumcm_corpus_style import build_cards, summarize
 
@@ -449,10 +451,13 @@ class WorkflowTests(unittest.TestCase):
                 "synthesis/review_route.json",
                 "synthesis/paper_payload.json",
                 "audits/review_findings.json",
+                "compliance/ai_artifact_inventory.csv",
+                "synthesis/implementation_trace.csv",
+                "audits/similarity/reference_corpus.csv",
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 12)
+            self.assertEqual(manifest["workflow_version"], 13)
             payload = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["schema_version"], 3)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
@@ -652,7 +657,7 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 12)
+            self.assertEqual(manifest["workflow_version"], 13)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["innovation_mode"], "standard")
             profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
@@ -753,7 +758,28 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(migrated["questions"][0]["presentation_plan"]["mechanism_visual"], "pending")
             self.assertTrue((root / "synthesis" / "paper_payload_v11.json").is_file())
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 12)
+            self.assertEqual(manifest["workflow_version"], 13)
+
+    def test_v12_migration_preserves_payload_and_adds_integrity_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for relative in ("innovation", "compliance", "synthesis", "shared", "audits"):
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            manifest = {
+                "schema_version": 12, "workflow_version": 12, "competition": "CUMCM",
+                "year": 2026, "branches": ["model-a"], "innovation_mode": "standard",
+            }
+            payload = {"schema_version": 3, "status": "ready", "questions": [{"question_id": "Q1"}]}
+            (root / "competition_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "synthesis" / "paper_payload.json").write_text(json.dumps(payload), encoding="utf-8")
+            (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
+            report = migrate(root)
+            self.assertEqual(report["status"], "pass")
+            self.assertEqual(json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8")), payload)
+            self.assertTrue((root / "compliance" / "ai_artifact_inventory.csv").is_file())
+            self.assertTrue((root / "synthesis" / "implementation_trace.csv").is_file())
+            self.assertTrue((root / "audits" / "similarity" / "reference_corpus.csv").is_file())
+            self.assertEqual(json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))["workflow_version"], 13)
 
     def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1020,6 +1046,9 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
+            support = root / "support" / "solve.py"
+            support.parent.mkdir(parents=True)
+            support.write_text("def solve(): return 1\n", encoding="utf-8")
             section = root / "paper" / "sections" / "questions" / "q01.tex"
             section.write_text(
                 "\\section{问题一}\\label{sec:q1}\\n"
@@ -1114,6 +1143,9 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
+            implementation = root / "support" / "solve.py"
+            implementation.parent.mkdir(parents=True)
+            implementation.write_text("def balance_constraint(x):\n    return sum(x)\n", encoding="utf-8")
             section = root / "paper" / "sections" / "questions" / "q01.tex"
             section.write_text(
                 "\\section{问题一}\\label{sec:q1}\n"
@@ -1535,9 +1567,121 @@ class WorkflowTests(unittest.TestCase):
                     }
                 },
             }
+            inventory_rows = []
+            for path in sorted((root / "paper").rglob("*")):
+                if not path.is_file() or "build" in path.relative_to(root).parts or path.name == "ai_usage_details.tex":
+                    continue
+                rel = path.relative_to(root).as_posix()
+                inventory_rows.append({
+                    "artifact_id": f"A{len(inventory_rows) + 1}", "artifact_type": "paper",
+                    "relative_path": rel, "ai_used": "true" if path == section else "false",
+                    "use_ids": "U1" if path == section else "",
+                    "human_verification": "reviewed equations and reran tests" if path == section else "",
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "reviewer": "team-member",
+                    "checked_at": STAMP,
+                })
+            self.write_csv_rows(root / "compliance" / "ai_artifact_inventory.csv", inventory_rows)
             self.assertEqual(check_ai_compliance(root, profile), [])
             (root / "compliance" / "evidence" / "ai-use.txt").write_text("tampered\n", encoding="utf-8")
             self.assertTrue(any("sha256" in item for item in check_ai_compliance(root, profile)))
+
+    def test_ai_inventory_detects_unmapped_use_and_unclassified_deliverable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            section = root / "paper" / "sections" / "04_model.tex"
+            section.write_text("人工复核后的模型说明。 % AI_USE:U1\n", encoding="utf-8")
+            evidence = self.make_artifact(root, "compliance/evidence/u1.txt", "prompt, response and rerun evidence\n")
+            self.write_csv_rows(
+                root / "compliance" / "ai_usage_ledger.csv",
+                [{
+                    "use_id": "U1", "tool": "Codex", "version": "recorded", "purpose": "code review",
+                    "paper_section": "paper/sections/04_model.tex", "paper_anchor": "AI_USE:U1",
+                    "human_changes": "reran the implementation and rewrote the explanation",
+                    "verification_status": "verified", **evidence, "reviewer": "team-member",
+                }],
+            )
+            profile = {"requirements": {"ai": {"human_verification_required": True}}}
+            errors = check_ai_compliance(root, profile)
+            self.assertTrue(any("artifact inventory" in item for item in errors))
+
+            inventory_rows = []
+            for path in sorted((root / "paper").rglob("*")):
+                if not path.is_file() or "build" in path.relative_to(root).parts or path.name == "ai_usage_details.tex":
+                    continue
+                rel = path.relative_to(root).as_posix()
+                inventory_rows.append({
+                    "artifact_id": f"A{len(inventory_rows) + 1}", "artifact_type": "paper",
+                    "relative_path": rel, "ai_used": "true" if path == section else "false",
+                    "use_ids": "U1" if path == section else "",
+                    "human_verification": "rerun and rewrite" if path == section else "",
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "reviewer": "team-member",
+                    "checked_at": STAMP,
+                })
+            self.write_csv_rows(root / "compliance" / "ai_artifact_inventory.csv", inventory_rows)
+            self.assertEqual(check_ai_compliance(root, profile), [])
+            inventory_rows[0]["use_ids"] = "UNKNOWN"
+            inventory_rows[0]["ai_used"] = "true"
+            inventory_rows[0]["human_verification"] = "checked"
+            self.write_csv_rows(root / "compliance" / "ai_artifact_inventory.csv", inventory_rows)
+            self.assertTrue(any("unknown use_id" in item for item in check_ai_compliance(root, profile)))
+
+    def test_paper_integrity_blocks_chat_residue_and_missing_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            implementation = root / "support" / "solve.py"
+            implementation.parent.mkdir(parents=True)
+            implementation.write_text("def balance_constraint(x):\n    return sum(x)\n", encoding="utf-8")
+            section = root / "paper" / "sections" / "questions" / "q01.tex"
+            section.write_text("\\section{问题一}\n作为一个人工智能，以下给出答案。\n", encoding="utf-8")
+            report = validate_paper_integrity(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("chat-assistant" in item for item in report["errors"]))
+            self.assertTrue(any("implementation_trace" in item for item in report["errors"]))
+
+            section.write_text("\\section{问题一}\n由守恒关系建立约束。\\label{eq:q1-balance}\n", encoding="utf-8")
+            test = self.make_artifact(root, "audits/implementation/q1.txt", "balance constraint test passed\n")
+            result = root / "results" / "r1.txt"
+            result.parent.mkdir(parents=True)
+            result.write_text("0\n", encoding="utf-8")
+            self.write_csv_rows(root / "synthesis" / "result_manifest.csv", [{"result_id": "R1"}])
+            self.write_csv_rows(
+                root / "synthesis" / "implementation_trace.csv",
+                [{
+                    "trace_id": "T1", "question_id": "Q1", "paper_section": "paper/sections/questions/q01.tex",
+                    "equation_or_claim_anchor": "eq:q1-balance", "mathematical_role": "conservation constraint",
+                    "implementation_path": "support/solve.py", "implementation_symbol": "balance_constraint",
+                    "test_artifact_path": test["artifact_path"], "test_sha256": test["sha256"],
+                    "test_command": test["command_or_check"], "result_ids": "R1", "reviewer": "implementation-reviewer",
+                    "checked_at": STAMP,
+                }],
+            )
+            self.assertEqual(validate_paper_integrity(root)["status"], "pass")
+
+    def test_similarity_precheck_reports_excellent_paper_and_template_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            phrase = "针对观测序列中的周期变化我们构造分段状态变量并以滚动窗口完成参数更新"
+            section = root / "paper" / "sections" / "questions" / "q01.tex"
+            section.write_text("\\section{问题一}\n" + phrase * 3 + "\n", encoding="utf-8")
+            excellent = root / "audits" / "similarity" / "corpus" / "E1.txt"
+            template = root / "audits" / "similarity" / "corpus" / "T1.txt"
+            excellent.write_text(phrase * 3, encoding="utf-8")
+            template.write_text("另一段固定模板语言用于解释计算结果与实际约束之间的对应关系", encoding="utf-8")
+            self.write_csv_rows(
+                root / "audits" / "similarity" / "reference_corpus.csv",
+                [
+                    {"source_id": "E1", "source_type": "excellent_paper", "text_path": excellent.relative_to(root).as_posix(), "sha256": hashlib.sha256(excellent.read_bytes()).hexdigest(), "status": "verified"},
+                    {"source_id": "T1", "source_type": "template", "text_path": template.relative_to(root).as_posix(), "sha256": hashlib.sha256(template.read_bytes()).hexdigest(), "status": "verified"},
+                ],
+            )
+            report = validate_similarity_precheck(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("excellent-paper overlap" in item for item in report["errors"]))
+            section.write_text("\\section{问题一}\n根据数据中的局部变化建立状态量，并用留出区间检验结果。\n", encoding="utf-8")
+            self.assertEqual(validate_similarity_precheck(root)["status"], "pass")
 
 
 if __name__ == "__main__":

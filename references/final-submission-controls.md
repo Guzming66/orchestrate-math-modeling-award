@@ -11,6 +11,9 @@
 7. schema v2 `review_findings.json` 覆盖 scientific、implementation、statistical、uncertainty、claims；critical 已关闭，open major 不超 policy。
 8. 引用、输入、结果和复现台账全部指向实际 artifact 且 hash 匹配。
 9. 所有 blocking task 已完成或有明确、可审计的 waiver。
+10. `paper_integrity_report.json` 通过；关键公式/约束已映射到实现、测试和结果。
+11. `ai_artifact_inventory.csv` 覆盖全部论文/支撑交付物，并与 AI 使用台账双向一致。
+12. 本地优秀论文与实际写作模板已登记并完成相似度预检；所有命中均已人工复核。
 
 ## LaTeX 与额外产物
 

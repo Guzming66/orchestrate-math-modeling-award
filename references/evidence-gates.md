@@ -1,6 +1,6 @@
 # 证据门禁
 
-v12 不维护重复的 G0—G7 人工总表。每类判断由最接近证据的 validator 负责，Scientific Review Engine 统一收集需要人类判断的发现，finalizer 只汇总验证状态与真实产物。
+v13 不维护重复的 G0—G7 人工总表。每类判断由最接近证据的 validator 负责，Scientific Review Engine 统一收集需要人类判断的发现，finalizer 只汇总验证状态与真实产物。
 
 ## 硬阻断
 

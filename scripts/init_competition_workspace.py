@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 12
+WORKFLOW_VERSION = 13
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -216,6 +216,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "audits/innovation",
         "audits/implementation",
         "audits/presentation",
+        "audits/integrity",
+        "audits/similarity/corpus",
         "audits/submission",
         "environment",
         "submission",
@@ -562,6 +564,26 @@ def create_workspace(args: argparse.Namespace) -> Path:
             "sha256", "command_or_check", "checked_at", "reviewer", "notes",
         ],
     )
+    write_csv_header_if_missing(
+        root / "compliance" / "ai_artifact_inventory.csv",
+        [
+            "artifact_id", "artifact_type", "relative_path", "ai_used", "use_ids",
+            "human_verification", "sha256", "reviewer", "checked_at", "notes",
+        ],
+    )
+    write_csv_header_if_missing(
+        root / "synthesis" / "implementation_trace.csv",
+        [
+            "trace_id", "question_id", "paper_section", "equation_or_claim_anchor",
+            "mathematical_role", "implementation_path", "implementation_symbol",
+            "test_artifact_path", "test_sha256", "test_command", "result_ids",
+            "reviewer", "checked_at", "notes",
+        ],
+    )
+    write_csv_header_if_missing(
+        root / "audits" / "similarity" / "reference_corpus.csv",
+        ["source_id", "source_type", "text_path", "sha256", "status", "notes"],
+    )
 
     task_board_path = root / "shared" / "task_board.csv"
     if not task_board_path.exists():
@@ -592,7 +614,9 @@ def create_workspace(args: argparse.Namespace) -> Path:
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
                 ["scientific-review", "all", "review", "paper;citation-audit;reproduction;review-router", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "routed scientific, implementation, statistical, uncertainty and claim review", ""],
                 ["paper-presentation", "all", "presentation", "scientific-review", "", "audits/presentation", "", "", "keep rigorous control-plane evidence out of contest prose", "pending", "true", "language firewall, visible validation, mechanism figures, precision and page-value audit", ""],
-                ["submission", "all", "submission", "paper-presentation", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
+                ["paper-integrity", "all", "integrity", "paper-presentation", "", "audits/integrity", "", "", "repair prose, derivation and implementation seams", "pending", "true", "chat-residue, repeated-template, vague-claim and equation-code-result audit", ""],
+                ["similarity-precheck", "all", "similarity", "paper-integrity", "", "audits/similarity", "", "", "rewrite copied or template-derived prose and document human review", "pending", "true", "local excellent-paper and template overlap report", ""],
+                ["submission", "all", "submission", "similarity-precheck", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
             ]
         )
         with task_board_path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -631,6 +655,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
             "- [ ] Every core external claim has an exact evidence locator and the source supports the wording\n"
             "- [ ] Published versions and correction/retraction status have been checked\n"
             "- [ ] Actual AI use is truthfully disclosed exactly where and how the verified profile requires\n"
+            "- [ ] ai_artifact_inventory.csv classifies every paper/support deliverable and maps every AI-assisted artifact bidirectionally to ai_usage_ledger.csv\n"
             "- [ ] Any profile-required AI details artifact covers tool/version, purpose, process, adoption, modification and verification\n"
             "- [ ] Any profile-required AI details artifact appears in the required submission location\n"
             "- [ ] Any additional material explicitly required by current rules is present\n"
@@ -639,6 +664,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
             "- [ ] Review routing matches each question's evidence profile; statistical not_applicable decisions remain internal\n"
             "- [ ] Independent scientific, implementation, statistical, uncertainty and claim review is closed\n"
             "- [ ] paper_payload.json is ready and final prose contains no audit/freeze/hash/status meta-language\n"
+            "- [ ] Paper integrity audit finds no chat residue or broken equation-code-result trace; repeated templates, vague claims and derivation jumps were reviewed\n"
+            "- [ ] Local similarity precheck covers registered excellent-paper OCR and reusable templates; every reported overlap was manually reviewed\n"
             "- [ ] Displayed precision is justified by material input/model uncertainty rather than solver digits\n"
             "- [ ] Every retained figure supports one argument and remains readable at final LaTeX size\n"
             "- [ ] Submission build passes and every rendered PDF page has been visually inspected\n"

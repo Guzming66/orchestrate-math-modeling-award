@@ -16,7 +16,7 @@ from pathlib import Path
 
 from package_submission import package_workspace
 from build_latex import strip_tex_comments
-from evidence_utils import artifact_errors, sha256_file
+from evidence_utils import artifact_errors, sha256_file, split_ids
 from preflight import preflight
 from snapshot_environment import snapshot
 from validate_competition_profile import load_profile, validate_competition_profile
@@ -25,8 +25,10 @@ from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
 from validate_paper_presentation import validate_paper_presentation
 from validate_paper_question_coverage import validate_paper_question_coverage
+from validate_paper_integrity import validate_paper_integrity
 from validate_review_findings import validate_review_findings
 from validate_review_route import validate_review_route
+from validate_similarity_precheck import validate_similarity_precheck
 from validate_task_board import validate_task_board
 
 
@@ -273,11 +275,20 @@ def check_ai_compliance(workspace: Path, profile: dict[str, object]) -> list[str
         for field in ("inline_disclosure_required", "tool_reference_required", "human_verification_required")
     )
     ledger = read_csv(workspace / "compliance" / "ai_usage_ledger.csv")
+    inventory = read_csv(workspace / "compliance" / "ai_artifact_inventory.csv")
     if ledger_required and not ledger:
         errors.append("competition profile requires an AI usage ledger")
+    if ledger_required and not inventory:
+        errors.append("competition profile requires an AI artifact inventory for reverse coverage")
     known_bib_keys = bib_keys(paper / "references.bib")
+    ledger_ids: set[str] = set()
     for index, row in enumerate(ledger, start=2):
         label = row.get("use_id", "").strip() or f"AI usage row {index}"
+        use_id = row.get("use_id", "").strip()
+        if use_id in ledger_ids:
+            errors.append(f"duplicate AI use_id: {use_id}")
+        if use_id:
+            ledger_ids.add(use_id)
         for field in ("use_id", "tool", "version", "purpose", "paper_section", "paper_anchor"):
             if not row.get(field, "").strip():
                 errors.append(f"{label}: {field} is empty")
@@ -304,6 +315,68 @@ def check_ai_compliance(workspace: Path, profile: dict[str, object]) -> list[str
             if not row.get("human_changes", "").strip():
                 errors.append(f"{label}: human_changes is empty")
         errors.extend(artifact_errors(workspace, row, f"{label} AI evidence"))
+
+    inventory_use_ids: set[str] = set()
+    inventoried_paths: set[str] = set()
+    inventory_ids: set[str] = set()
+    for index, row in enumerate(inventory, start=2):
+        artifact_id = row.get("artifact_id", "").strip() or f"AI inventory row {index}"
+        if artifact_id in inventory_ids:
+            errors.append(f"duplicate AI artifact_id: {artifact_id}")
+        inventory_ids.add(artifact_id)
+        for field in ("artifact_id", "artifact_type", "relative_path", "ai_used", "reviewer", "checked_at"):
+            if not row.get(field, "").strip():
+                errors.append(f"{artifact_id}: {field} is empty")
+        rel = row.get("relative_path", "").replace("\\", "/").strip()
+        if rel in inventoried_paths:
+            errors.append(f"duplicate AI inventory path: {rel}")
+        if rel:
+            inventoried_paths.add(rel)
+        try:
+            artifact = (workspace / rel).resolve()
+            artifact.relative_to(workspace)
+        except ValueError:
+            errors.append(f"{artifact_id}: relative_path escapes workspace")
+        else:
+            if not artifact.is_file():
+                errors.append(f"{artifact_id}: inventoried artifact is missing")
+            elif row.get("sha256", "").strip().lower() != sha256_file(artifact):
+                errors.append(f"{artifact_id}: sha256 does not match")
+        ai_used = row.get("ai_used", "").strip().lower()
+        if ai_used not in {"true", "false"}:
+            errors.append(f"{artifact_id}: ai_used must be true or false")
+        use_ids = set(split_ids(row.get("use_ids", "")))
+        if ai_used == "true":
+            if not use_ids:
+                errors.append(f"{artifact_id}: AI-assisted artifact has no use_ids")
+            if not row.get("human_verification", "").strip():
+                errors.append(f"{artifact_id}: human_verification is empty")
+            inventory_use_ids.update(use_ids)
+        elif use_ids:
+            errors.append(f"{artifact_id}: ai_used is false but use_ids are present")
+        checked_at = row.get("checked_at", "").strip()
+        if checked_at:
+            try:
+                datetime.fromisoformat(checked_at.replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(f"{artifact_id}: checked_at is not an ISO timestamp")
+
+    if ledger_required or ledger or inventory:
+        required_inventory_paths = {
+            relative(workspace, path)
+            for folder in (workspace / "paper", workspace / "support")
+            if folder.is_dir()
+            for path in folder.rglob("*")
+            if path.is_file()
+            and "build" not in path.relative_to(workspace).parts
+            and path.name not in {"ai_usage_details.tex"}
+        }
+        for rel in sorted(required_inventory_paths - inventoried_paths):
+            errors.append(f"AI artifact inventory does not classify deliverable: {rel}")
+        for use_id in sorted(ledger_ids - inventory_use_ids):
+            errors.append(f"AI usage ledger entry is not mapped to an inventoried artifact: {use_id}")
+        for use_id in sorted(inventory_use_ids - ledger_ids):
+            errors.append(f"AI artifact inventory references an unknown use_id: {use_id}")
 
     return errors
 
@@ -501,6 +574,14 @@ def finalize(workspace: Path) -> dict[str, object]:
     errors.extend(str(item) for item in paper_presentation_report.get("errors", []))
     warnings.extend(str(item) for item in paper_presentation_report.get("warnings", []))
 
+    paper_integrity_report = validate_paper_integrity(workspace)
+    errors.extend(str(item) for item in paper_integrity_report.get("errors", []))
+    warnings.extend(str(item) for item in paper_integrity_report.get("warnings", []))
+
+    similarity_report = validate_similarity_precheck(workspace)
+    errors.extend(str(item) for item in similarity_report.get("errors", []))
+    warnings.extend(str(item) for item in similarity_report.get("warnings", []))
+
     paper_question_report: dict[str, object] = {"status": "not_applicable"}
     if competition == "CUMCM":
         paper_question_report = validate_paper_question_coverage(workspace)
@@ -607,6 +688,8 @@ def finalize(workspace: Path) -> dict[str, object]:
         "model_selection_status": model_selection_report.get("status"),
         "review_route_status": review_route_report.get("status"),
         "paper_presentation_status": paper_presentation_report.get("status"),
+        "paper_integrity_status": paper_integrity_report.get("status"),
+        "similarity_precheck_status": similarity_report.get("status"),
         "paper_question_coverage_status": paper_question_report.get("status"),
         "review_status": review_report.get("status"),
         "citation_validator_output": citation_output[-4000:],

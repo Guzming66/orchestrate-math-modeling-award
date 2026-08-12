@@ -42,7 +42,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 3. 运行 `python scripts/preflight.py <workspace>`。
 4. 原题与原始附件放入 `inputs/original/`，保留原文件和哈希。
 5. 冻结 `shared/problem_contract.md`：逐小题写目标、输入、输出、约束、评价标准、依赖和统一接口。
-6. 当已有 v8–v11 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留旧文件，并把论文载荷升级为 v12 的本问直接答案、本问验证与机理图契约。
+6. 当已有 v8–v12 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留旧文件，并补齐 v13 的论文完整性、AI 使用反向覆盖和相似度预检契约。
 
 `standard` 是默认模式；`championship` 只提高独立审查和稳健性要求，不强迫增加模型、Agent 或计算量。
 
@@ -124,6 +124,13 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - 每幅登记图必须具有信息性题注、可复现图源、明确支持的论文主张，并在正文用 `\ref`/`\autoref`/`\cref` 编号引用；PowerPoint、截图、手工 P 图或让 SciPilot 生成机理示意图均不放行。尺度差异明显的几何问题优先用“全局场景 + 局部判据”双面板。
 - 运行 `python scripts/validate_paper_presentation.py <workspace>`。
 
+论文定稿前完整读取 [paper-integrity-and-similarity.md](references/paper-integrity-and-similarity.md)：
+
+- 运行 `validate_paper_integrity.py`，检查五类可定位接缝：重复章节骨架、推导跳步、公式—代码—结果断链、无指标的空泛评价和聊天/工具残留；告警必须回到原段人工判断，不以同义改写掩盖逻辑问题；
+- 用 `synthesis/implementation_trace.csv` 把关键公式或约束映射到实现符号、最小测试 artifact 与结果 ID；
+- 用 `compliance/ai_artifact_inventory.csv` 分类 `paper/` 与 `support/` 中每个交付文件，与 `ai_usage_ledger.csv` 做双向覆盖；不得漏填、虚填或缩小实质用途；
+- 把本地优秀论文 OCR 和实际使用的写作模板登记到 `audits/similarity/reference_corpus.csv`，运行 `validate_similarity_precheck.py`；逐段复核命中，不把预检报告当成官方查重结果。
+
 内部审计继续保留全部精度、命令和哈希；防火墙只约束论文表达，不降低证据标准。
 
 ## LaTeX 唯一真源
@@ -168,6 +175,6 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 `python scripts/finalize_submission.py <workspace>`
 
-硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、缺少 provenance、核心结果不可复现、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、占位符或仅标题章节、未关闭 critical/超阈值 major、哈希失配、profile 要求的产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
+硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、缺少 provenance、核心结果不可复现、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、高置信度聊天残留、关键公式—代码—结果不可追踪、AI 使用台账与交付文件未双向覆盖、相似度预检存在未复核的模板/优秀论文重合、占位符或仅标题章节、未关闭 critical/超阈值 major、哈希失配、profile 要求的产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
 
 只有 `audits/submission/final_report.json` 为 `pass` 才能报告“技术上可提交”。这不等同于赛事合规的最终法律判断，也不保证任何奖项；由队员复核并完成正式上传。

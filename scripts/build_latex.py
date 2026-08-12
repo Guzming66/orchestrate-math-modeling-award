@@ -65,6 +65,12 @@ INTERNAL_PAPER_PATTERNS = (
     (r"不(?:虚构|构造).{0,12}(?:置信区间|可信区间)", "negative statistical meta-statement"),
     (r"不提出创新主张", "negative innovation meta-statement"),
     (r"代码.{0,8}(?:哈希|hash)", "internal code-hash terminology"),
+    (r"作为(?:一个)?(?:人工智能|AI|语言模型)", "chat-assistant self-reference"),
+    (r"根据(?:您|用户)的(?:要求|提示)", "chat-assistant request reference"),
+    (r"希望(?:以上|这些)(?:内容|回答).{0,16}(?:帮助|有用)", "chat-assistant closing phrase"),
+    (r"(?:turn\d+(?:search|view|fetch)\d+|cite\b|:codex-annotation|::(?:code-comment|created-thread))", "tool or chat transcript residue"),
+    (r"\[citation needed\]", "unresolved citation placeholder"),
+    (r"```", "Markdown code fence leaked into LaTeX source"),
 )
 LEAN_PAPER_WARNINGS = (
     (r"\\section\*?\{问题重述\}", "standalone problem restatement is usually redundant"),
