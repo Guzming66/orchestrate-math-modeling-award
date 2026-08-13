@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 13
+WORKFLOW_VERSION = 14
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -257,6 +257,28 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "| question_id | exact task verbs | required answer/deliverable | inputs and upstream dependencies | constraints/precision | verified against prompt |\n"
         "|---|---|---|---|---|---|\n",
     )
+    write_json_if_missing(
+        root / "shared" / "problem_contract.json",
+        {
+            "schema_version": 1,
+            "status": "draft",
+            "competition": args.competition,
+            "year": args.year,
+            "problem": args.problem,
+            "problem_artifacts": [],
+            "questions": [],
+            "notes": "Freeze only after checking every question against a hashed file under inputs/original. This JSON, not the narrative markdown, is the scope authority.",
+        },
+    )
+    write_json_if_missing(
+        root / "shared" / "question_interfaces.json",
+        {
+            "schema_version": 1,
+            "status": "draft",
+            "interfaces": [],
+            "notes": "For every declared cross-question dependency, freeze the consumed result fingerprints and a downstream evidence artifact. Any upstream change invalidates the interface.",
+        },
+    )
     write_text_if_missing(
         root / "shared" / "problem_route.md",
         "# Problem route\n\n"
@@ -428,7 +450,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
         {
             "schema_version": 2,
             "status": "not_reviewed",
-            "policy": {"max_open_major": 0 if args.innovation_mode == "championship" else 1},
+            "policy": {"max_accepted_major": 0 if args.innovation_mode == "championship" else 1},
             "coverage": [],
             "findings": [],
         },
@@ -437,13 +459,30 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_json_if_missing(
         root / "audits" / "reproduction" / "reproduction_status.json",
         {
+            "schema_version": 2,
             "status": "pending",
             "reviewer": "",
             "checked_at": "",
-            "clean_run_command": "",
-            "core_results_reproduced": False,
-            "evidence": [],
+            "runner": {
+                "argv": [],
+                "working_directory": ".",
+                "timeout_seconds": 900,
+                "clean_paths": [],
+            },
+            "expected_artifacts": [],
             "blocking_findings": [],
+        },
+    )
+    write_json_if_missing(
+        root / "audits" / "presentation" / "final_pdf_visual_review.json",
+        {
+            "schema_version": 1,
+            "status": "pending",
+            "pdf_path": "",
+            "pdf_sha256": "",
+            "page_count": 0,
+            "render_dpi": 150,
+            "page_reviews": [],
         },
     )
     write_json_if_missing(
@@ -530,6 +569,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
             writer.writerow(
                 [
                     "result_id",
+                    "question_id",
                     "claim_location",
                     "value",
                     "unit",
@@ -590,7 +630,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
         model_task_ids = [f"model-{chr(97 + index)}" for index in range(args.branches)]
         task_rows = [
             ["profile-audit", "all", "rules", "", "", "compliance/competition_profile.json", "", "", "stop until an official source-backed profile is verified", "pending", "true", "versioned profile and source snapshots", ""],
-            ["problem-route", "all", "routing", "", "", "shared/problem_route.md", "", "", "unverified exploratory structure only until profile passes", "pending", "true", "frozen problem route", ""],
+            ["problem-route", "all", "routing", "", "", "shared/problem_contract.json", "", "", "unverified exploratory structure only until profile passes", "pending", "true", "source-bound question contract and problem route", ""],
             ["semantic-mapper", "all", "semantics", "problem-route", "", "innovation/semantic_fidelity_map.md", "", "", "preserve the mathematical object explicitly required by the problem", "pending", "true", "semantic requirements and simplified benchmark", ""],
             ["strong-baseline", "all", "baseline", "problem-route", "", "innovation/strong_baseline.md", "", "", "simplest defensible baseline", "pending", "true", "baseline definition and planned validation", ""],
             ["baseline-failure", "all", "diagnostic", "strong-baseline", "", "innovation/baseline_failure_map.md", "", "", "report no innovation if no material failure exists", "pending", "true", "artifact-backed failure map", ""],
@@ -607,8 +647,9 @@ def create_workspace(args: argparse.Namespace) -> Path:
         task_rows.extend(
             [
                 ["model-freeze", "all", "selection", joined_models, "", "synthesis/model_selection.json", "", "", "select the best validated solution, including the baseline when warranted", "pending", "true", "question-level adaptive evidence profiles, decisions and rejection reasons", ""],
+                ["question-interfaces", "all", "integration", "model-freeze", "", "shared/question_interfaces.json", "", "", "invalidate downstream work whenever an upstream registered result changes", "pending", "true", "frozen cross-question result snapshots", ""],
                 ["review-router", "all", "routing", "model-freeze", "", "synthesis/review_route.json", "", "", "route statistical review only where evidence profile requires it", "pending", "true", "review route and implementation-assumption checks", ""],
-                ["reproduction", "all", "reproduction", "model-freeze", "", "audits/reproduction", "", "", "rerun selected solution", "pending", "true", "clean-run report", ""],
+                ["reproduction", "all", "reproduction", "question-interfaces", "", "audits/reproduction", "", "", "rerun selected solution in an isolated copy", "pending", "true", "executable argv contract and hash-matched clean-run report", ""],
                 ["paper-payload", "all", "synthesis", "model-freeze", "", "synthesis/paper_payload.json", "", "", "export scientific content without control-plane prose", "pending", "true", "sanitized payload with visible-validation and mechanism-visual plans", ""],
                 ["paper", "all", "writing", "paper-payload", "", "paper", "", "", "write only from the sanitized payload and verified result/citation identifiers", "pending", "true", "direct-LaTeX contest paper", ""],
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
@@ -616,6 +657,7 @@ def create_workspace(args: argparse.Namespace) -> Path:
                 ["paper-presentation", "all", "presentation", "scientific-review", "", "audits/presentation", "", "", "keep rigorous control-plane evidence out of contest prose", "pending", "true", "language firewall, visible validation, mechanism figures, precision and page-value audit", ""],
                 ["paper-integrity", "all", "integrity", "paper-presentation", "", "audits/integrity", "", "", "repair prose, derivation and implementation seams", "pending", "true", "chat-residue, repeated-template, vague-claim and equation-code-result audit", ""],
                 ["similarity-precheck", "all", "similarity", "paper-integrity", "", "audits/similarity", "", "", "rewrite copied or template-derived prose and document human review", "pending", "true", "local excellent-paper and template overlap report", ""],
+                ["final-pdf-visual-review", "all", "presentation", "similarity-precheck", "", "audits/presentation/final_pdf_visual_review.json", "", "", "render again and re-review every changed page", "pending", "false", "page-hash-bound visual review; finalizer enforces this after build", ""],
                 ["submission", "all", "submission", "similarity-precheck", "", "submission", "", "", "submit only verified artifacts", "pending", "true", "paper PDF and profile-required artifacts", ""],
             ]
         )

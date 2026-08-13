@@ -135,10 +135,17 @@ def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> sub
     )
 
 
-def fallback_build(paper_dir: Path, main: Path, engine: str, build_dir: Path) -> subprocess.CompletedProcess[str]:
+def latex_environment(paper_dir: Path) -> dict[str, str]:
     environment = os.environ.copy()
     environment["TEXINPUTS"] = str(paper_dir) + os.pathsep + environment.get("TEXINPUTS", "")
     environment["BIBINPUTS"] = str(paper_dir) + os.pathsep + environment.get("BIBINPUTS", "")
+    environment["SOURCE_DATE_EPOCH"] = "946684800"
+    environment["FORCE_SOURCE_DATE"] = "1"
+    return environment
+
+
+def fallback_build(paper_dir: Path, main: Path, engine: str, build_dir: Path) -> subprocess.CompletedProcess[str]:
+    environment = latex_environment(paper_dir)
     command = [
         engine,
         "-interaction=nonstopmode",
@@ -189,6 +196,7 @@ def compile_paper(paper_dir: Path, main: Path, engine: str, build_dir: Path) -> 
                 main.name,
             ],
             paper_dir,
+            latex_environment(paper_dir),
         )
     return fallback_build(paper_dir, main, engine, build_dir)
 

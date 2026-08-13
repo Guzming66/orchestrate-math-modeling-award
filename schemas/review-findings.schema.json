@@ -9,8 +9,8 @@
     "status": {"enum": ["not_reviewed", "reviewed"]},
     "policy": {
       "type": "object",
-      "required": ["max_open_major"],
-      "properties": {"max_open_major": {"type": "integer", "minimum": 0}}
+      "required": ["max_accepted_major"],
+      "properties": {"max_accepted_major": {"type": "integer", "minimum": 0}}
     },
     "coverage": {
       "type": "array",
@@ -45,7 +45,10 @@
           "artifact_path": {"type": "string"},
           "sha256": {"type": "string"},
           "command_or_check": {"type": "string"},
-          "checked_at": {"type": "string"}
+          "checked_at": {"type": "string"},
+          "risk_owner": {"type": "string"},
+          "impact_scope": {"type": "string"},
+          "fallback": {"type": "string"}
         },
         "allOf": [
           {
@@ -57,6 +60,23 @@
                 "sha256": {"pattern": "^[0-9a-fA-F]{64}$"},
                 "command_or_check": {"minLength": 1},
                 "checked_at": {"minLength": 1}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "severity": {"const": "major"},
+                "status": {"const": "accepted_risk"}
+              },
+              "required": ["severity", "status"]
+            },
+            "then": {
+              "required": ["risk_owner", "impact_scope", "fallback"],
+              "properties": {
+                "risk_owner": {"minLength": 1},
+                "impact_scope": {"minLength": 1},
+                "fallback": {"minLength": 1}
               }
             }
           }

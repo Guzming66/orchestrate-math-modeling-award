@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Page-hash-bound final PDF visual review",
+  "type": "object",
+  "required": ["schema_version", "status", "pdf_path", "pdf_sha256", "page_count", "render_dpi", "page_reviews"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["pending", "pass"]},
+    "page_reviews": {"type": "array"}
+  }
+}

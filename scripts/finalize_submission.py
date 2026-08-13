@@ -26,10 +26,14 @@ from validate_paper_innovation import validate_paper_innovation
 from validate_paper_presentation import validate_paper_presentation
 from validate_paper_question_coverage import validate_paper_question_coverage
 from validate_paper_integrity import validate_paper_integrity
+from validate_pdf_visual_review import render_and_validate_pdf
+from validate_problem_contract import validate_problem_contract
+from validate_question_interfaces import validate_question_interfaces
 from validate_review_findings import validate_review_findings
 from validate_review_route import validate_review_route
 from validate_similarity_precheck import validate_similarity_precheck
 from validate_task_board import validate_task_board
+from run_reproduction import run_reproduction
 
 
 PASS = {"pass", "verified", "done"}
@@ -182,7 +186,7 @@ def check_results(workspace: Path) -> list[str]:
             errors.append(f"{result_id}: result file is missing: {rel}")
         elif row.get("sha256", "").strip().lower() != sha256_file(path):
             errors.append(f"{result_id}: result sha256 does not match")
-        for field in ("claim_location", "value", "unit", "generator", "command", "input_ids", "seed", "environment_file", "reviewer"):
+        for field in ("question_id", "claim_location", "value", "unit", "generator", "command", "input_ids", "seed", "environment_file", "reviewer"):
             if not row.get(field, "").strip():
                 errors.append(f"{result_id}: {field} is empty")
         if row.get("status", "").strip().lower() != "verified":
@@ -190,30 +194,6 @@ def check_results(workspace: Path) -> list[str]:
         environment_file = row.get("environment_file", "").strip()
         if environment_file and not (workspace / environment_file).is_file():
             errors.append(f"{result_id}: environment_file is missing")
-    return errors
-
-
-def check_reproduction(workspace: Path) -> list[str]:
-    document = load_json(workspace / "audits" / "reproduction" / "reproduction_status.json")
-    errors: list[str] = []
-    if str(document.get("status", "")).lower() not in PASS:
-        errors.append("reproduction status is not pass")
-    if document.get("core_results_reproduced") is not True:
-        errors.append("core_results_reproduced is not true")
-    for field in ("reviewer", "checked_at", "clean_run_command"):
-        if not str(document.get(field, "")).strip():
-            errors.append(f"reproduction: {field} is empty")
-    evidence = document.get("evidence")
-    if not isinstance(evidence, list) or not evidence:
-        errors.append("reproduction evidence is empty")
-    else:
-        for index, record in enumerate(evidence, start=1):
-            if not isinstance(record, dict):
-                errors.append(f"reproduction evidence {index} is not an artifact record")
-                continue
-            errors.extend(artifact_errors(workspace, record, f"reproduction evidence {index}"))
-    if isinstance(document.get("blocking_findings"), list) and document["blocking_findings"]:
-        errors.append("reproduction blocking findings remain")
     return errors
 
 
@@ -543,6 +523,10 @@ def finalize(workspace: Path) -> dict[str, object]:
     errors.extend(str(item) for item in profile_report.get("errors", []))
     warnings.extend(str(item) for item in profile_report.get("warnings", []))
 
+    problem_contract_report = validate_problem_contract(workspace, final=True)
+    errors.extend(str(item) for item in problem_contract_report.get("errors", []))
+    warnings.extend(str(item) for item in problem_contract_report.get("warnings", []))
+
     environment_report = snapshot(workspace)
     if environment_report.get("status") != "pass":
         errors.extend(str(item) for item in environment_report.get("errors", []))
@@ -565,6 +549,10 @@ def finalize(workspace: Path) -> dict[str, object]:
     model_selection_report = validate_model_selection(workspace)
     errors.extend(str(item) for item in model_selection_report.get("errors", []))
     warnings.extend(str(item) for item in model_selection_report.get("warnings", []))
+
+    question_interfaces_report = validate_question_interfaces(workspace, final=True)
+    errors.extend(str(item) for item in question_interfaces_report.get("errors", []))
+    warnings.extend(str(item) for item in question_interfaces_report.get("warnings", []))
 
     review_route_report = validate_review_route(workspace)
     errors.extend(str(item) for item in review_route_report.get("errors", []))
@@ -600,11 +588,17 @@ def finalize(workspace: Path) -> dict[str, object]:
         "citations": check_citations(workspace),
         "data_provenance": check_data_provenance(workspace),
         "results": check_results(workspace),
-        "reproduction": check_reproduction(workspace),
         "ai": check_ai_compliance(workspace, profile),
     }
     for findings in checks.values():
         errors.extend(findings)
+
+    reproduction_report = {"status": "skipped_upstream_block", "errors": []}
+    if errors:
+        warnings.append("clean reproduction skipped because upstream hard gates failed")
+    else:
+        reproduction_report = run_reproduction(workspace)
+        errors.extend(str(item) for item in reproduction_report.get("errors", []))
 
     if errors:
         build_exit, build_report = 1, {"status": "skipped_upstream_block"}
@@ -620,6 +614,12 @@ def finalize(workspace: Path) -> dict[str, object]:
         profile_paper_errors = check_paper_against_profile(workspace, profile, build_report)
         checks["paper_profile"] = profile_paper_errors
         errors.extend(profile_paper_errors)
+
+    visual_review_report: dict[str, object] = {"status": "skipped_upstream_block"}
+    if build_report.get("status") == "pass":
+        pdf = Path(str(build_report.get("pdf", "")))
+        visual_review_report = render_and_validate_pdf(workspace, pdf)
+        errors.extend(str(item) for item in visual_review_report.get("errors", []))
 
     ai_details_report: dict[str, object] = {"status": "not_applicable"}
     ai_requirements = profile_requirements(profile, "ai")
@@ -681,17 +681,21 @@ def finalize(workspace: Path) -> dict[str, object]:
         "checks": checks,
         "preflight_status": preflight_report.get("status"),
         "competition_profile_status": profile_report.get("status"),
+        "problem_contract_status": problem_contract_report.get("status"),
         "environment_status": environment_report.get("status"),
         "task_status": task_report.get("status"),
         "innovation_status": innovation_report.get("status"),
         "paper_innovation_status": paper_innovation_report.get("status"),
         "model_selection_status": model_selection_report.get("status"),
+        "question_interfaces_status": question_interfaces_report.get("status"),
         "review_route_status": review_route_report.get("status"),
         "paper_presentation_status": paper_presentation_report.get("status"),
         "paper_integrity_status": paper_integrity_report.get("status"),
         "similarity_precheck_status": similarity_report.get("status"),
         "paper_question_coverage_status": paper_question_report.get("status"),
         "review_status": review_report.get("status"),
+        "reproduction_status": reproduction_report.get("status"),
+        "final_pdf_visual_review_status": visual_review_report.get("status"),
         "citation_validator_output": citation_output[-4000:],
         "build_status": build_report.get("status"),
         "ai_details_build_status": ai_details_report.get("status"),

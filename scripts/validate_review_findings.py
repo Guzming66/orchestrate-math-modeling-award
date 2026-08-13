@@ -54,10 +54,10 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
     if document.get("status") != "reviewed":
         errors.append("independent review is not complete")
     policy = document.get("policy")
-    max_open_major = policy.get("max_open_major") if isinstance(policy, dict) else None
-    if not isinstance(max_open_major, int) or max_open_major < 0:
-        errors.append("review policy max_open_major must be a non-negative integer")
-        max_open_major = 0
+    max_accepted_major = policy.get("max_accepted_major") if isinstance(policy, dict) else None
+    if not isinstance(max_accepted_major, int) or max_accepted_major < 0:
+        errors.append("review policy max_accepted_major must be a non-negative integer")
+        max_accepted_major = 0
 
     expected = expected_coverage(workspace)
     if not expected:
@@ -102,7 +102,7 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
     if not isinstance(findings, list):
         errors.append("review findings is not an array")
         findings = []
-    open_major = 0
+    accepted_major = 0
     seen: set[str] = set()
     known_questions = {question for question, _ in expected}
     for index, finding in enumerate(findings, start=1):
@@ -137,16 +137,21 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
         if severity == "critical" and status != "closed":
             errors.append(f"{label}: critical finding remains unresolved")
         if severity == "major" and status == "open":
-            open_major += 1
+            errors.append(f"{label}: major finding remains open")
+        if severity == "major" and status == "accepted_risk":
+            accepted_major += 1
+            for field in ("risk_owner", "impact_scope", "fallback"):
+                if not str(finding.get(field, "")).strip():
+                    errors.append(f"{label}: accepted major risk requires {field}")
         if severity in {"minor", "suggestion"} and status == "open":
             warnings.append(f"{label}: {severity} finding remains open")
-    if open_major > max_open_major:
-        errors.append(f"open major findings exceed policy: {open_major} > {max_open_major}")
+    if accepted_major > max_accepted_major:
+        errors.append(f"accepted major risks exceed policy: {accepted_major} > {max_accepted_major}")
 
     report = {
         "status": "pass" if not errors else "block",
         "covered_reviews": sorted(f"{question}/{kind}" for question, kind in covered),
-        "open_major": open_major,
+        "accepted_major": accepted_major,
         "errors": sorted(set(errors)),
         "warnings": sorted(set(warnings)),
     }

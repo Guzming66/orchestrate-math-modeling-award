@@ -51,7 +51,7 @@ Profile 未核验时，允许 Structure Mapper 和 Strong Baseline Builder 做�
 
 任务说明：只读取官方题面和原始附件，不看其他分支。不得按 A/B/C/D/E 字母预设题型。
 
-先逐字对照题面填写 `shared/problem_contract.md` 的 Question contract：每个 `Qn` 记录任务动词、必须交付的答案/文件、输入与上游依赖、约束/精度，并标记已与原题核验。再输出 `shared/problem_route.md`：数学对象、任务动词、约束结构、数据机制、可验证锚点、赛程风险和一个强基线。只在能检验关键假设或降低风险时增加替代路线，并说明必要性；路线数量不是创新指标。
+先逐字对照题面填写 `shared/problem_contract.json`：为原题文件登记 SHA-256，为每个 `Qn` 记录题面定位、任务动词、必须交付的答案/文件、输入、结构化上游依赖、约束/精度和核验说明。`problem_contract.md` 只作阅读辅助。再输出 `shared/problem_route.md`：数学对象、任务动词、约束结构、数据机制、可验证锚点、赛程风险和一个强基线。只在能检验关键假设或降低风险时增加替代路线，并说明必要性；路线数量不是创新指标。
 
 ## Innovation Claim Engine 独立任务
 
@@ -104,7 +104,7 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 任务说明：假定代码可能存在问题，从干净输出目录重新运行，不修改原代码来“帮助通过”。
 
-运行 `snapshot_environment.py`，从干净目录核对 `result_manifest.csv` 中每个核心表格、图片和摘要数字。执行至少两次随机性检查；把命令、复核人、证据和状态写入 `reproduction_status.json`。将无法运行、数值不一致、隐藏输入和人工中间步骤列为阻断项。
+运行 `snapshot_environment.py`；为 `result_manifest.csv` 的每条结果填写所属小问。把无 shell 的 argv、工作目录、需要清除的输出路径、全部预期结果哈希、复核人和时间写入 schema v2 `reproduction_status.json`，状态改为 ready。由 `finalize_submission.py` 在隔离副本删除旧结果后实际重跑。对随机算法另执行至少两次随机性检查；将无法运行、数值不一致、隐藏输入和人工中间步骤列为阻断项。
 
 ## 展示论文标杆审计
 
@@ -126,7 +126,7 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 ## 论文总编
 
-任务说明：只使用通过门禁的结果，不重新计算或发明数字。
+任务说明：只使用通过门禁的结果，不重新计算或发明数字。开始前另完整读取 `execution-integrity.md`；小问范围、顺序和依赖以结构化原题契约为准。
 
 先完整读取 `paper-presentation-engine.md`，从通过模型门禁的结果生成 schema v3 `synthesis/paper_payload.json`。论文手以该 Payload 为主要科学输入，不从 audit prose 复制句子。先逐项对照原题核验小问契约和依赖，`Qn` 必须映射到 `qNN.tex`，不能按 OCR 标题或文件顺序猜测。每问先写“主张—最短充分证据—最佳载体”表，再填写 `presentation_plan`：用 `answer_form / answer_anchor / answer_takeaway` 登记本问最短直接答案，用 `validation_form / validation_anchor / validation_takeaway` 登记本问最强验证；两个锚点都必须位于对应 `qNN.tex`。同时裁决是否需要机理/几何直观图；依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系时必须列出图中至少两个关键对象或关系。建立论点—证据—代码—图表追踪表并填写 `synthesis/innovation_claims.csv`；每个 promoted claim 按其 reasoning path 映射到 semantic requirement 或 baseline failure、数学改变、结果 ID、引用键、LaTeX 章节和锚点。只合并通过文献门禁的引用；保留会改变结论的假设、验证、敏感性、局限和当届声明。按实际小题分别写入 `paper/sections/questions/qNN.tex`，并在 `paper/generated/question_sections.tex` 按 `model_selection.json` 的同一顺序逐一载入；正文必须不依赖代码/数据附录即可回答全部小问。不创建大段题面复述、候选路线回顾、内部审计说明、泛化优缺点清单、空标题或重复结论。CUMCM 写作完整读取 `cumcm-paper-writing-and-figures.md`。每次合并后直接编译 LaTeX；draft 报告为 `review_only`，不得称为最终稿。若逐问交付 `qNN_standalone.pdf`，必须用 `build_latex.py --main qNN_standalone.tex --mode submission`，并随交付核对 `question_handoff_candidate`、`handoff_eligible=true` 和 PDF 哈希；裸 `xelatex` 产物不得交付。
 
@@ -142,4 +142,4 @@ Innovation discovery/evidence/Critic/Jury 不得作为普通模型分支的强�
 
 先运行 `validate_paper_presentation.py` 和 `validate_paper_question_coverage.py`，确认 Payload 与冻结小题一致、`Qn → qNN.tex` 映射正确、每问在本问文件内同时有直接答案和最强验证锚点、正文没有内部元语言且每问恰有一个已载入的非空 LaTeX 文件。独立小问稿还要核对专属 build report，确认竞赛语言、四项实质职责、验证锚点、比较证据和末页密度均通过。再从 `paper/main.tex` 运行直接构建，核对文献审计报告、编译报告、未定义引用、重复标签、缺失字体或字符、占位符、超宽公式/表格、浮动体位置，以及 competition profile 指定的页数、纸张、大小、匿名和 PDF 元数据。把 PDF 全部页面渲染为图片，重点检查摘要页、密集公式页、宽表、图组、参考文献和附录；确认正文脱离附录仍完整回答全部小问。
 
-按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。只有模型选择、创新主张、科学审查、论文、profile 要求的支撑包、所有哈希和匿名/凭据扫描同时通过才允许放行。
+按已核验 profile 检查电子论文与支撑材料；填写匿名词表和显式支撑清单，运行 `finalize_submission.py`。第一次通过上游门禁后逐页审核它生成的 `final_pdf_pages`，填写 `final_pdf_visual_review.json` 再重跑；页面变化会自动撤销对应复核。只有模型选择、创新主张、隔离复现、科学审查、论文、profile 要求的支撑包、所有哈希和匿名/凭据扫描同时通过才允许放行。

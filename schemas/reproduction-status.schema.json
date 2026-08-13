@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Executable isolated reproduction contract",
+  "type": "object",
+  "required": ["schema_version", "status", "reviewer", "checked_at", "runner", "expected_artifacts", "blocking_findings"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "status": {"enum": ["pending", "ready"]},
+    "runner": {
+      "type": "object",
+      "required": ["argv", "working_directory", "timeout_seconds", "clean_paths"]
+    },
+    "expected_artifacts": {"type": "array"},
+    "blocking_findings": {"type": "array"}
+  }
+}

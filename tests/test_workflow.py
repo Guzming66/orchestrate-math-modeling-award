@@ -16,7 +16,7 @@ SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from finalize_submission import check_ai_compliance, check_data_provenance, finalize
-from build_latex import audit_question_standalone, classify_artifact, parse_page_fill, scan_sources
+from build_latex import audit_question_standalone, classify_artifact, latex_environment, parse_page_fill, scan_sources
 from migrate_workspace import migrate
 from package_submission import package_workspace
 from score_claim_benchmark import score
@@ -27,11 +27,15 @@ from validate_paper_innovation import validate_paper_innovation
 from validate_paper_presentation import validate_paper_presentation
 from validate_paper_question_coverage import validate_paper_question_coverage
 from validate_paper_integrity import validate_paper_integrity
+from validate_pdf_visual_review import resolve_pdftoppm, validate_review_records
+from validate_problem_contract import validate_problem_contract
+from validate_question_interfaces import result_fingerprint, validate_question_interfaces
 from validate_review_findings import validate_review_findings
 from validate_review_route import validate_review_route
 from validate_similarity_precheck import validate_similarity_precheck
 from validate_task_board import validate_task_board
 from audit_cumcm_corpus_style import build_cards, summarize
+from run_reproduction import run_reproduction
 
 
 STAMP = "2026-08-08T00:00:00+00:00"
@@ -163,6 +167,11 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertEqual(parse_page_fill(bbox), [0.9, 0.4])
 
+    def test_latex_build_uses_reproducible_timestamp_environment(self) -> None:
+        environment = latex_environment(Path("paper"))
+        self.assertEqual(environment["SOURCE_DATE_EPOCH"], "946684800")
+        self.assertEqual(environment["FORCE_SOURCE_DATE"], "1")
+
     def test_cumcm_initializer_uses_lean_question_level_latex_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -175,7 +184,7 @@ class WorkflowTests(unittest.TestCase):
             appendix = (root / "paper" / "sections" / "90_appendix.tex").read_text(encoding="utf-8")
             self.assertNotIn("DRAFT CONTENT", appendix)
 
-    def test_cumcm_question_coverage_matches_frozen_model_questions(self) -> None:
+    def test_cumcm_question_coverage_matches_frozen_problem_questions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.initialize(root)
@@ -186,6 +195,10 @@ class WorkflowTests(unittest.TestCase):
             }
             (root / "synthesis" / "model_selection.json").write_text(
                 json.dumps(selection, ensure_ascii=False), encoding="utf-8"
+            )
+            (root / "shared" / "problem_contract.json").write_text(
+                json.dumps({"schema_version": 1, "status": "frozen", "questions": [{"question_id": "Q1"}, {"question_id": "Q2"}]}),
+                encoding="utf-8",
             )
             question_dir = root / "paper" / "sections" / "questions"
             (question_dir / "q01.tex").write_text("\\section{问题一}\n直接答案。\n", encoding="utf-8")
@@ -454,10 +467,14 @@ class WorkflowTests(unittest.TestCase):
                 "compliance/ai_artifact_inventory.csv",
                 "synthesis/implementation_trace.csv",
                 "audits/similarity/reference_corpus.csv",
+                "shared/problem_contract.json",
+                "shared/question_interfaces.json",
+                "audits/reproduction/reproduction_status.json",
+                "audits/presentation/final_pdf_visual_review.json",
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 13)
+            self.assertEqual(manifest["workflow_version"], 14)
             payload = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["schema_version"], 3)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
@@ -657,7 +674,7 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 13)
+            self.assertEqual(manifest["workflow_version"], 14)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["innovation_mode"], "standard")
             profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
@@ -736,7 +753,7 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             model = {"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "analytical"}]}
-            review = {"schema_version": 2, "status": "reviewed", "policy": {"max_open_major": 1}, "coverage": [], "findings": []}
+            review = {"schema_version": 2, "status": "reviewed", "policy": {"max_accepted_major": 1}, "coverage": [], "findings": []}
             payload = {
                 "schema_version": 1,
                 "status": "ready",
@@ -758,7 +775,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(migrated["questions"][0]["presentation_plan"]["mechanism_visual"], "pending")
             self.assertTrue((root / "synthesis" / "paper_payload_v11.json").is_file())
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 13)
+            self.assertEqual(manifest["workflow_version"], 14)
 
     def test_v12_migration_preserves_payload_and_adds_integrity_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -779,7 +796,34 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((root / "compliance" / "ai_artifact_inventory.csv").is_file())
             self.assertTrue((root / "synthesis" / "implementation_trace.csv").is_file())
             self.assertTrue((root / "audits" / "similarity" / "reference_corpus.csv").is_file())
-            self.assertEqual(json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))["workflow_version"], 13)
+            self.assertEqual(json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))["workflow_version"], 14)
+            self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
+
+    def test_v13_migration_invalidates_old_reproduction_trust(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for relative in ("compliance", "synthesis", "shared", "audits/reproduction", "audits/presentation", "innovation"):
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            (root / "competition_manifest.json").write_text(
+                json.dumps({"schema_version": 13, "workflow_version": 13, "competition": "CUMCM", "year": 2026, "problem": "A", "innovation_mode": "standard"}),
+                encoding="utf-8",
+            )
+            (root / "audits" / "reproduction" / "reproduction_status.json").write_text(
+                json.dumps({"status": "pass", "core_results_reproduced": True}), encoding="utf-8"
+            )
+            (root / "audits" / "review_findings.json").write_text(
+                json.dumps({"schema_version": 2, "status": "reviewed", "policy": {"max_open_major": 1}, "coverage": [], "findings": []}), encoding="utf-8"
+            )
+            (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
+            report = migrate(root)
+            self.assertEqual(report["status"], "pass")
+            reproduction = json.loads((root / "audits" / "reproduction" / "reproduction_status.json").read_text(encoding="utf-8"))
+            self.assertEqual(reproduction["schema_version"], 2)
+            self.assertEqual(reproduction["status"], "pending")
+            self.assertTrue((root / "audits" / "reproduction" / "reproduction_status_v13.json").is_file())
+            review = json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8"))
+            self.assertEqual(review["policy"], {"max_accepted_major": 1})
+            self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
 
     def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1373,7 +1417,7 @@ class WorkflowTests(unittest.TestCase):
             document = {
                 "schema_version": 2,
                 "status": "reviewed",
-                "policy": {"max_open_major": 1},
+                "policy": {"max_accepted_major": 1},
                 "coverage": [
                     {"question_id": "Q1", "review_type": kind, "status": "pass", "rationale": "independently checked"}
                     for kind in ("scientific", "implementation", "statistical", "uncertainty", "claims")
@@ -1396,6 +1440,170 @@ class WorkflowTests(unittest.TestCase):
             report = validate_review_findings(root)
             self.assertEqual(report["status"], "block")
             self.assertTrue(any("critical" in item for item in report["errors"]))
+
+    def test_problem_contract_is_source_bound_and_matches_model_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            source = self.make_artifact(root, "inputs/original/problem.txt", "问题一：计算结果。\n问题二：沿用问题一。\n")
+            contract = {
+                "schema_version": 1,
+                "status": "frozen",
+                "problem_artifacts": [
+                    {
+                        "source_id": "P1",
+                        "relative_path": source["artifact_path"],
+                        "sha256": source["sha256"],
+                        "verification_command": source["command_or_check"],
+                        "verified_at": source["checked_at"],
+                        "reviewer": "prompt-auditor",
+                    }
+                ],
+                "questions": [
+                    {
+                        "question_id": "Q1", "source_id": "P1", "source_locator": "line 1",
+                        "task_verbs": ["计算"], "required_answer": "数值结果", "required_artifacts": [],
+                        "inputs": "原题数据", "upstream_question_ids": [], "constraints_precision": "题面精度",
+                        "verified_against_prompt": True, "verification_notes": "逐字核对",
+                    },
+                    {
+                        "question_id": "Q2", "source_id": "P1", "source_locator": "line 2",
+                        "task_verbs": ["沿用"], "required_answer": "下游结果", "required_artifacts": [],
+                        "inputs": "原题与 Q1", "upstream_question_ids": ["Q1"], "constraints_precision": "题面精度",
+                        "verified_against_prompt": True, "verification_notes": "逐字核对",
+                    },
+                ],
+            }
+            (root / "shared" / "problem_contract.json").write_text(json.dumps(contract), encoding="utf-8")
+            (root / "synthesis" / "model_selection.json").write_text(
+                json.dumps({"questions": [{"question_id": "Q1"}, {"question_id": "Q2"}]}), encoding="utf-8"
+            )
+            self.assertEqual(validate_problem_contract(root, final=True)["status"], "pass")
+            contract["problem_artifacts"][0]["sha256"] = "0" * 64
+            (root / "shared" / "problem_contract.json").write_text(json.dumps(contract), encoding="utf-8")
+            report = validate_problem_contract(root, final=True)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("sha256" in item for item in report["errors"]))
+
+    def test_question_interface_detects_stale_upstream_result(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            (root / "shared" / "problem_contract.json").write_text(
+                json.dumps({"questions": [{"question_id": "Q1", "upstream_question_ids": []}, {"question_id": "Q2", "upstream_question_ids": ["Q1"]}]}),
+                encoding="utf-8",
+            )
+            result_file = root / "branches" / "model-a" / "results" / "q1.txt"
+            result_file.write_text("1.0\n", encoding="utf-8")
+            environment = root / "environment" / "snapshot.json"
+            environment.write_text("{}\n", encoding="utf-8")
+            row = {
+                "result_id": "R1", "question_id": "Q1", "claim_location": "Q1",
+                "value": "1.0", "unit": "s", "relative_path": "branches/model-a/results/q1.txt",
+                "generator": "fixture", "command": "python solve.py", "input_ids": "D1", "seed": "deterministic",
+                "environment_file": "environment/snapshot.json", "sha256": hashlib.sha256(result_file.read_bytes()).hexdigest(),
+                "status": "verified", "reviewer": "reviewer", "notes": "",
+            }
+            self.write_csv_rows(root / "synthesis" / "result_manifest.csv", [row])
+            evidence = self.make_artifact(root, "branches/model-a/results/q2-used-r1.txt")
+            interface = {
+                "schema_version": 1, "status": "frozen", "interfaces": [
+                    {
+                        "interface_id": "I1", "producer_question_id": "Q1", "consumer_question_id": "Q2",
+                        "result_ids": ["R1"], "result_fingerprints": {"R1": result_fingerprint(row)},
+                        "status": "frozen", "reviewer": "integrator", **evidence,
+                    }
+                ],
+            }
+            (root / "shared" / "question_interfaces.json").write_text(json.dumps(interface), encoding="utf-8")
+            self.assertEqual(validate_question_interfaces(root, final=True)["status"], "pass")
+            row["value"] = "1.1"
+            self.write_csv_rows(root / "synthesis" / "result_manifest.csv", [row])
+            report = validate_question_interfaces(root, final=True)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("stale" in item for item in report["errors"]))
+
+    def test_malformed_question_dependency_blocks_without_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            (root / "shared" / "problem_contract.json").write_text(
+                json.dumps({"schema_version": 1, "status": "frozen", "problem_artifacts": [], "questions": [{"question_id": "Q1", "upstream_question_ids": None}]}),
+                encoding="utf-8",
+            )
+            self.assertEqual(validate_problem_contract(root, final=True)["status"], "block")
+            self.assertEqual(validate_question_interfaces(root, final=True)["status"], "block")
+
+    def test_reproduction_executes_in_clean_copy_and_checks_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            output = root / "results" / "answer.txt"
+            output.parent.mkdir()
+            output.write_text("42\n", encoding="utf-8")
+            self.write_csv_rows(
+                root / "synthesis" / "result_manifest.csv",
+                [{"result_id": "R1", "question_id": "Q1", "relative_path": "results/answer.txt"}],
+            )
+            document = {
+                "schema_version": 2, "status": "ready", "reviewer": "independent-runner", "checked_at": STAMP,
+                "runner": {
+                    "argv": [sys.executable, "-c", "from pathlib import Path; Path('results').mkdir(exist_ok=True); Path('results/answer.txt').write_text('42\\n')"],
+                    "working_directory": ".", "timeout_seconds": 30, "clean_paths": ["results"],
+                },
+                "expected_artifacts": [{"relative_path": "results/answer.txt", "sha256": hashlib.sha256(output.read_bytes()).hexdigest()}],
+                "blocking_findings": [],
+            }
+            (root / "audits" / "reproduction" / "reproduction_status.json").write_text(json.dumps(document), encoding="utf-8")
+            self.assertEqual(run_reproduction(root)["status"], "pass")
+            document["runner"]["argv"] = [sys.executable, "-c", "print('did not generate result')"]
+            (root / "audits" / "reproduction" / "reproduction_status.json").write_text(json.dumps(document), encoding="utf-8")
+            report = run_reproduction(root)
+            self.assertEqual(report["status"], "block")
+            self.assertTrue(any("hash-mismatched" in item for item in report["errors"]))
+
+    def test_accepted_major_risk_requires_owner_scope_and_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            evidence = self.make_artifact(root, "audits/review/major.txt")
+            reviews = {kind: {"status": "required", "rationale": "review"} for kind in ("scientific", "implementation", "statistical", "uncertainty", "claims")}
+            (root / "synthesis" / "review_route.json").write_text(
+                json.dumps({"schema_version": 1, "status": "routed", "questions": [{"question_id": "Q1", "reviews": reviews}]}), encoding="utf-8"
+            )
+            finding = {
+                "finding_id": "M1", "question_id": "Q1", "review_type": "scientific", "severity": "major",
+                "summary": "limited boundary evidence", "affected_claim_or_result": "Q1", "status": "accepted_risk",
+                "resolution": "restrict conclusion", **evidence,
+            }
+            document = {
+                "schema_version": 2, "status": "reviewed", "policy": {"max_accepted_major": 1},
+                "coverage": [{"question_id": "Q1", "review_type": kind, "status": "pass", "rationale": "review"} for kind in reviews],
+                "findings": [finding],
+            }
+            (root / "audits" / "review_findings.json").write_text(json.dumps(document), encoding="utf-8")
+            self.assertEqual(validate_review_findings(root)["status"], "block")
+            finding.update({"risk_owner": "team lead", "impact_scope": "one boundary scenario", "fallback": "report conservative bound"})
+            (root / "audits" / "review_findings.json").write_text(json.dumps(document), encoding="utf-8")
+            self.assertEqual(validate_review_findings(root)["status"], "pass")
+
+    def test_visual_reviews_are_bound_to_rendered_page_hashes(self) -> None:
+        digest = "a" * 64
+        document = {
+            "page_reviews": [{
+                "page": 1, "image_sha256": digest, "status": "pass", "reviewer": "page-reviewer", "checked_at": STAMP,
+                "checks": {"crop_and_overlap": "pass", "fonts_and_symbols": "pass", "equations_tables_figures": "pass", "pagination_and_anonymity": "pass"},
+            }]
+        }
+        self.assertEqual(validate_review_records(document, [digest]), [])
+        self.assertTrue(any("changed" in item for item in validate_review_records(document, ["b" * 64])))
+
+    def test_pdftoppm_resolver_returns_runnable_binary_or_native_command(self) -> None:
+        executable = resolve_pdftoppm()
+        self.assertIsNotNone(executable)
+        self.assertTrue(Path(executable).is_file())
+        if sys.platform == "win32":
+            self.assertNotEqual(Path(executable).suffix.lower(), ".cmd")
 
     def test_benchmark_score_tracks_false_innovation_and_simplicity(self) -> None:
         report = score(

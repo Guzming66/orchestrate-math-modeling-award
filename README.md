@@ -2,7 +2,7 @@
 
 面向 CUMCM 国赛与 MCM/ICM 美赛的证据驱动总控。它协调逐问建模、创新主张、引用核验、复现、独立审查、LaTeX 写作和最终提交；不预测或保证奖项。
 
-## v13 的七个核心系统
+## v14 的八个核心系统
 
 1. Rule Engine：只执行带生效时间、官方来源与哈希的赛事规则档案。
 2. Model Selection Engine：按小题选择 Evidence Profile，以强基线和可复核证据决定方案。
@@ -11,6 +11,7 @@
 5. Contest Paper Presentation Engine：用 Paper Payload 隔离内部控制语言，要求验证在纸面可核验，为几何、轨迹与可见性推理提供直观机理图，并让逐问独立稿执行与主论文相同的语言、证据和版面门禁。
 6. Submission Finalizer：编译、渲染、交叉核对并按已核验规则执行 fail-closed 终审。
 7. Paper Integrity Engine：检查论文接缝、公式—代码—结果追踪、AI 使用双向覆盖，并对本地优秀论文与固定模板执行可解释的相似度预检。
+8. Execution Integrity Engine：把原题逐问契约绑定到源文件哈希，冻结跨问结果快照，实际执行隔离复现，并让最终 PDF 的逐页复核随页面变化自动失效。
 
 工作流采用五个阶段：`rule_verification → exploration → model_freeze → paper_freeze → submission`。默认使用 `standard`；`championship` 加强独立审查与稳健性，但不强制增加模型、统计段落或计算量。
 
@@ -46,6 +47,8 @@
 - 创新不是模型数量或算法复杂度；融合本身没有创新信用。
 - 搜索宽度只告警，不阻断；简单而充分的方案可以胜出。
 - 规则、文献、数据、结果和重大审查发现必须由真实产物支持。
+- 跨问结果不能靠文字“沿用”；上游数值、命令或文件变化后，下游必须重新验收。
+- 复现由终审器在隔离副本实际执行；最终 PDF 每页必须通过渲染哈希绑定的视觉检查。
 - 内部证据保持完整，最终论文不暴露任务、冻结、哈希或审计元语言。
 - 最终论文以 LaTeX 为唯一真源，不做 Word/Markdown 格式转换。
 - `final_report.json=pass` 只表示框架定义的技术门禁通过，不代表官方接受或获奖保证。

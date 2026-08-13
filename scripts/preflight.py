@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from validate_pdf_visual_review import resolve_pdftoppm
+
 
 def load_json(path: Path) -> dict[str, object]:
     try:
@@ -102,7 +104,7 @@ def preflight(workspace: Path | None = None, competition: str = "") -> dict[str,
         if isinstance(build, dict) and str(build.get("latex_engine", "")).strip():
             command_names.append(str(build["latex_engine"]))
     for name in sorted(set(command_names)):
-        found = shutil.which(name)
+        found = resolve_pdftoppm() if name == "pdftoppm" else shutil.which(name)
         checks[f"command:{name}"] = found
         if not found:
             errors.append(f"required command is missing: {name}")

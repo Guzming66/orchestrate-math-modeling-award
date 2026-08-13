@@ -38,11 +38,11 @@ def validate_paper_question_coverage(workspace: Path) -> dict[str, object]:
     workspace = workspace.resolve()
     errors: list[str] = []
     warnings: list[str] = []
-    selection = load_json(workspace / "synthesis" / "model_selection.json")
-    questions = selection.get("questions")
+    contract = load_json(workspace / "shared" / "problem_contract.json")
+    questions = contract.get("questions")
     if not isinstance(questions, list) or not questions:
         questions = []
-        errors.append("model_selection.json has no core questions to map into the paper")
+        errors.append("problem_contract.json has no source-verified questions to map into the paper")
     question_ids = [
         str(item.get("question_id", "")).strip() if isinstance(item, dict) else ""
         for item in questions
@@ -60,7 +60,7 @@ def validate_paper_question_coverage(workspace: Path) -> dict[str, object]:
         errors.append("question_sections.tex loads a question section more than once")
     if len(normalized_inputs) != len(question_ids):
         errors.append(
-            f"paper loads {len(normalized_inputs)} question section(s), but model selection freezes {len(question_ids)} core question(s)"
+            f"paper loads {len(normalized_inputs)} question section(s), but problem contract freezes {len(question_ids)} question(s)"
         )
 
     mappings = []

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source-bound problem contract",
+  "type": "object",
+  "required": ["schema_version", "status", "problem_artifacts", "questions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["draft", "frozen"]},
+    "problem_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_id", "relative_path", "sha256", "verification_command", "verified_at", "reviewer"]
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["question_id", "source_id", "source_locator", "task_verbs", "required_answer", "required_artifacts", "inputs", "upstream_question_ids", "constraints_precision", "verified_against_prompt", "verification_notes"]
+      }
+    }
+  }
+}

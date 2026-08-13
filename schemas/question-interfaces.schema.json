@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cross-question result snapshots",
+  "type": "object",
+  "required": ["schema_version", "status", "interfaces"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["draft", "frozen"]},
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["interface_id", "producer_question_id", "consumer_question_id", "result_ids", "result_fingerprints", "status", "artifact_path", "sha256", "command_or_check", "checked_at", "reviewer"]
+      }
+    }
+  }
+}

@@ -1,13 +1,13 @@
 ---
 name: orchestrate-math-modeling
-description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛. Use when a contest problem must be decomposed, modeled, validated, written directly in LaTeX, and audited against current official rules. Coordinates adaptive question-level evidence, innovation claims, sources, reproducibility, contest-paper presentation, independent review, and final submission. Does not predict or guarantee awards."
+description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛. Use when a contest problem must be decomposed, modeled, validated, written directly in LaTeX, and audited against current official rules. Coordinates source-bound question contracts, cross-question result freshness, adaptive evidence, innovation claims, isolated reproduction, paper presentation, page-level PDF review, and final submission. Does not predict or guarantee awards."
 ---
 
 # 数学建模竞赛总控
 
 本 Skill 是裁决与集成层，不是“自动获奖器”。目标是让规则、模型选择、创新主张、科学结论和提交文件都有可追溯证据，并让最简单的充分方案可以胜出。
 
-## 六个核心系统
+## 八个核心系统
 
 1. Competition Rule Engine：只执行当届官方来源支持的 Competition Profile v2。
 2. Model Selection Engine：按每个核心小题选择 Evidence Profile，记录基准模型、候选、拟合前理由、类型自适应证据、最终选择和淘汰理由。
@@ -15,6 +15,8 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 4. Scientific Review Engine：按小题路由科学、实现、统计、不确定性和主张审查，统一写入 `audits/review_findings.json`。
 5. Contest Paper Presentation Engine：用 `paper_payload.json` 隔离控制平面与论文正文，控制语言、篇幅、精度和图表信息密度。
 6. Submission Finalizer：只执行已经结构化的规则与验证状态，直编 LaTeX、核对哈希、匿名性和要求的提交产物。
+7. Paper Integrity Engine：检查聊天/模板接缝、公式—代码—结果追踪、AI 使用双向覆盖和优秀论文/固定模板相似度预检。
+8. Execution Integrity Engine：用题面哈希契约约束小问范围，冻结跨问结果快照，在隔离副本实际重跑，并把最终 PDF 的逐页复核绑定到 PDF 与渲染哈希。
 
 历史赛题 benchmark 是离线评估工具，不参与赛中终审，也不输出获奖率。
 
@@ -41,8 +43,8 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 3. 运行 `python scripts/preflight.py <workspace>`。
 4. 原题与原始附件放入 `inputs/original/`，保留原文件和哈希。
-5. 冻结 `shared/problem_contract.md`：逐小题写目标、输入、输出、约束、评价标准、依赖和统一接口。
-6. 当已有 v8–v12 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留旧文件，并补齐 v13 的论文完整性、AI 使用反向覆盖和相似度预检契约。
+5. 冻结 `shared/problem_contract.json`：逐小题连接原题文件哈希与定位，写任务动词、输入、输出、约束、精度、明确产物和结构化上游依赖；`problem_contract.md` 只作阅读辅助。
+6. 当已有 v8–v13 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留科学内容，但强制重建题面契约、跨问接口、可执行复现与最终 PDF 复核记录。
 
 `standard` 是默认模式；`championship` 只提高独立审查和稳健性要求，不强迫增加模型、Agent 或计算量。
 
@@ -99,14 +101,17 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - `$statistical-analysis` 只在抽样、估计、预测、分布主张、机器学习或随机模拟需要时调用；确定性分析/几何/优化可内部标记 `not_applicable`，不得因此生成论文解释段；
 - claims review 始终检查摘要、正文、图表和结论是否超过结果与文献证据。
 
-运行 `validate_review_route.py`。各问完成后把覆盖与发现写入 schema v2 `audits/review_findings.json`；严重度仅用 `critical / major / minor / suggestion`。critical 和 major 必须有 `artifact_path + sha256 + command_or_check + checked_at`；未关闭 critical 阻断，open major 数不得超过 policy。运行 `validate_review_findings.py`。
+运行 `validate_review_route.py`。各问完成后把覆盖与发现写入 schema v2 `audits/review_findings.json`；严重度仅用 `critical / major / minor / suggestion`。critical 和 major 必须有 `artifact_path + sha256 + command_or_check + checked_at`；critical 与 open major 阻断。允许的 accepted major 还必须写责任人、影响范围和后备方案，且不得超过 policy。运行 `validate_review_findings.py`。
 
 ## 来源、结果与复现
 
+开始跨问合并和终审前完整读取 [execution-integrity.md](references/execution-integrity.md)。
+
 - 添加或修改文献时必须调用 `$citation-management`，完整执行 [citation-integrity-audit.md](references/citation-integrity-audit.md)。搜索摘要只用于发现，不代替原文。
 - `audits/data/data_provenance.csv` 覆盖所有原始与外部输入。
-- `synthesis/result_manifest.csv` 覆盖摘要、结论和关键图表中的核心数字，并追踪到输入、命令、环境、单位、随机种子和文件哈希。
-- `audits/reproduction/reproduction_status.json` 记录干净重跑命令、独立复核人和证据。
+- `synthesis/result_manifest.csv` 覆盖摘要、结论和关键图表中的核心数字，并标明所属小问，追踪到输入、命令、环境、单位、随机种子和文件哈希。
+- 每条结构化跨问依赖都写入 `shared/question_interfaces.json`；冻结上游 result fingerprint 与下游使用证据，上游改变即阻断。
+- `audits/reproduction/reproduction_status.json` 使用参数数组声明隔离重跑；Finalizer 实际执行并核对全部核心结果哈希，不接受人工填写的 pass。
 - 不虚构数据、文献、实验、评委意见、评分或获奖概率；明确区分官方事实、计算结果、假设和推测。
 
 ## 竞赛论文表达防火墙
@@ -175,6 +180,6 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 `python scripts/finalize_submission.py <workspace>`
 
-硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、缺少 provenance、核心结果不可复现、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、高置信度聊天残留、关键公式—代码—结果不可追踪、AI 使用台账与交付文件未双向覆盖、相似度预检存在未复核的模板/优秀论文重合、占位符或仅标题章节、未关闭 critical/超阈值 major、哈希失配、profile 要求的产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
+硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、题面文件或逐问定位无哈希契约、跨问结果快照过期、缺少 provenance、隔离重跑失败、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、高置信度聊天残留、关键公式—代码—结果不可追踪、AI 使用台账与交付文件未双向覆盖、相似度预检存在未复核的模板/优秀论文重合、占位符或仅标题章节、critical/open major 未关闭或 accepted major 超 policy、哈希失配、最终 PDF 有未复核或变化页面、profile 产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
 
 只有 `audits/submission/final_report.json` 为 `pass` 才能报告“技术上可提交”。这不等同于赛事合规的最终法律判断，也不保证任何奖项；由队员复核并完成正式上传。
