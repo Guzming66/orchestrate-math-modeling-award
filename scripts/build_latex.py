@@ -13,6 +13,8 @@ import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from latex_sources import recorded_tex_sources, tex_source_closure
+
 
 ENGINE_BY_COMPETITION = {
     "CUMCM": "xelatex",
@@ -107,10 +109,10 @@ BLOCKING_LOG_PATTERNS = (
 QUESTION_STANDALONE_PATTERN = re.compile(r"^q(?P<number>\d+)_standalone\.tex$", re.IGNORECASE)
 HEADING_PATTERN = re.compile(r"\\(?:section|subsection|subsubsection|paragraph)\*?\{(?P<title>[^{}]+)\}")
 QUESTION_DUTIES = {
-    "task": re.compile(r"任务|问题分析|建模准备|判定|目标"),
-    "model": re.compile(r"模型|方法|推导|算法|求解"),
-    "result": re.compile(r"结果|结论|方案|回答"),
-    "validation": re.compile(r"验证|检验|敏感|误差|稳健|边界|复核"),
+    "task": re.compile(r"任务|问题分析|建模准备|判定|目标|task analysis|problem analysis|objective", re.IGNORECASE),
+    "model": re.compile(r"模型|方法|推导|算法|求解|model|method|derivation|algorithm|solution", re.IGNORECASE),
+    "result": re.compile(r"结果|结论|方案|回答|result|answer|conclusion|recommendation", re.IGNORECASE),
+    "validation": re.compile(r"验证|检验|敏感|误差|稳健|边界|复核|validation|verification|sensitivity|robustness|error|boundary", re.IGNORECASE),
 }
 COMPARATIVE_VALIDATION_PATTERN = re.compile(
     r"加密|步长|收敛|复算|枚举|敏感性|扰动|对照|比较|消融|网格|不同配置"
@@ -151,6 +153,7 @@ def fallback_build(paper_dir: Path, main: Path, engine: str, build_dir: Path) ->
         "-interaction=nonstopmode",
         "-halt-on-error",
         "-file-line-error",
+        "-recorder",
         f"-output-directory={build_dir}",
         main.name,
     ]
@@ -192,6 +195,7 @@ def compile_paper(paper_dir: Path, main: Path, engine: str, build_dir: Path) -> 
                 "-interaction=nonstopmode",
                 "-halt-on-error",
                 "-file-line-error",
+                "-recorder",
                 f"-outdir={build_dir}",
                 main.name,
             ],
@@ -336,15 +340,25 @@ def audit_question_standalone(
     return metrics, errors, warnings
 
 
-def scan_sources(paper_dir: Path, mode: str) -> tuple[list[str], list[str]]:
+def scan_sources(
+    paper_dir: Path, main_document: str, mode: str | None = None
+) -> tuple[list[str], list[str]]:
+    if mode is None:
+        mode = main_document
+        main_document = "main.tex"
     errors: list[str] = []
     warnings: list[str] = []
-    for path in paper_dir.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in {".tex", ".bib"}:
-            continue
+    sources, closure_issues = tex_source_closure(paper_dir, main_document)
+    closure_target = errors if mode == "submission" else warnings
+    closure_target.extend(f"LaTeX source closure: {issue}" for issue in closure_issues)
+    if not sources:
+        sources = [
+            path for path in paper_dir.rglob("*.tex")
+            if "build" not in path.relative_to(paper_dir).parts
+        ]
+    sources.extend(path for path in paper_dir.rglob("*.bib") if "build" not in path.relative_to(paper_dir).parts)
+    for path in sorted(set(sources)):
         relative = path.relative_to(paper_dir)
-        if "build" in relative.parts:
-            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         visible = strip_tex_comments(text) if path.suffix.lower() == ".tex" else text
         placeholder_target = errors if mode == "submission" else warnings
@@ -400,6 +414,41 @@ def scan_log(log_text: str, mode: str) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+def audit_recorded_tex_sources(
+    paper_dir: Path, main_document: str, build_dir: Path, mode: str
+) -> tuple[dict[str, object], list[str], list[str]]:
+    """Compare the engine-recorded local TeX inputs with the static source closure."""
+    paper_dir = paper_dir.resolve()
+    static_sources, _ = tex_source_closure(paper_dir, main_document)
+    recorder_path = build_dir / f"{Path(main_document).stem}.fls"
+    actual_sources: list[Path] = []
+    parse_issues: list[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
+    target = errors if mode == "submission" else warnings
+    if not recorder_path.is_file():
+        target.append(f"LaTeX recorder file is missing: {recorder_path.name}")
+    else:
+        actual_sources, parse_issues = recorded_tex_sources(paper_dir, recorder_path)
+        target.extend(f"LaTeX recorder: {issue}" for issue in parse_issues)
+        main_path = (paper_dir / main_document).resolve()
+        if main_path.is_file() and main_path not in actual_sources:
+            target.append("LaTeX recorder does not contain the main document")
+
+    extra_sources = sorted(set(actual_sources) - set(static_sources))
+    if extra_sources:
+        extras = ", ".join(path.relative_to(paper_dir).as_posix() for path in extra_sources)
+        target.append(f"LaTeX recorder found local TeX inputs outside the static source closure: {extras}")
+    report = {
+        "recorder_file": recorder_path.relative_to(paper_dir).as_posix(),
+        "recorder_present": recorder_path.is_file(),
+        "static_tex_sources": [path.relative_to(paper_dir).as_posix() for path in static_sources],
+        "actual_tex_sources": [path.relative_to(paper_dir).as_posix() for path in actual_sources],
+        "extra_tex_sources": [path.relative_to(paper_dir).as_posix() for path in extra_sources],
+    }
+    return report, errors, warnings
+
+
 def resolve_poppler_tool(name: str) -> str | None:
     executable = shutil.which(name)
     if not executable:
@@ -444,28 +493,77 @@ def pdf_metadata(pdf_path: Path) -> tuple[dict[str, object], str | None]:
     return metadata, None
 
 
-def pdf_text_page_fill(pdf_path: Path) -> tuple[list[float], str | None]:
+def pdf_text_page_layout(pdf_path: Path) -> tuple[list[dict[str, object]], str | None]:
     pdftotext = resolve_poppler_tool("pdftotext")
     if not pdftotext:
-        return [], "pdftotext is missing; standalone page-density audit was not run"
+        return [], "pdftotext is missing; page-layout audit was not run"
     result = run([pdftotext, "-bbox-layout", str(pdf_path), "-"], pdf_path.parent)
     if result.returncode != 0:
-        return [], "pdftotext bbox extraction failed; standalone page-density audit was not run"
+        return [], "pdftotext bbox extraction failed; page-layout audit was not run"
     try:
-        ratios = parse_page_fill(result.stdout)
+        metrics = parse_page_layout_metrics(result.stdout)
     except (ET.ParseError, KeyError, TypeError, ValueError):
-        return [], "pdftotext bbox output is invalid; standalone page-density audit was not run"
-    return ratios, None
+        return [], "pdftotext bbox output is invalid; page-layout audit was not run"
+    return metrics, None
+
+
+def pdf_text_page_fill(pdf_path: Path) -> tuple[list[float], str | None]:
+    metrics, warning = pdf_text_page_layout(pdf_path)
+    return [float(item["content_bottom_ratio"]) for item in metrics], warning
+
+
+def parse_page_layout_metrics(bbox_xml: str) -> list[dict[str, object]]:
+    """Measure body-text occupancy while ignoring a lone numeric page footer.
+
+    The metric is deliberately diagnostic rather than a quality score.  It lets the
+    final page review locate suspicious whitespace without counting a footer page
+    number as body content.
+    """
+    root = ET.fromstring(bbox_xml)
+    metrics: list[dict[str, object]] = []
+    footer_number = re.compile(r"^[\s\-\u2013\u2014]*[0-9ivxlcdmIVXLCDM]+[\s\-\u2013\u2014]*$")
+    for page_number, page in enumerate(root.findall(".//{*}page"), start=1):
+        height = float(page.attrib["height"])
+        body_words: list[tuple[float, float]] = []
+        excluded_footer_words = 0
+        lines = page.findall(".//{*}line")
+        if lines:
+            for line in lines:
+                words = line.findall(".//{*}word")
+                line_text = "".join("".join(word.itertext()) for word in words).strip()
+                line_top = float(
+                    line.attrib.get(
+                        "yMin",
+                        min((float(word.attrib.get("yMin", word.attrib["yMax"])) for word in words), default=0.0),
+                    )
+                )
+                is_page_footer = height > 0 and line_top >= 0.90 * height and bool(footer_number.fullmatch(line_text))
+                for word in words:
+                    if is_page_footer:
+                        excluded_footer_words += 1
+                    else:
+                        body_words.append((float(word.attrib.get("yMin", word.attrib["yMax"])), float(word.attrib["yMax"])))
+        else:
+            for word in page.findall(".//{*}word"):
+                body_words.append((float(word.attrib.get("yMin", word.attrib["yMax"])), float(word.attrib["yMax"])))
+        top = min((item[0] for item in body_words), default=0.0)
+        bottom = max((item[1] for item in body_words), default=0.0)
+        bottom_ratio = min(max(bottom / height, 0.0), 1.0) if height > 0 else 0.0
+        metrics.append(
+            {
+                "page": page_number,
+                "content_top_ratio": round(min(max(top / height, 0.0), 1.0), 4) if height > 0 else 0.0,
+                "content_bottom_ratio": round(bottom_ratio, 4),
+                "bottom_blank_ratio": round(1.0 - bottom_ratio, 4),
+                "word_count": len(body_words),
+                "excluded_footer_word_count": excluded_footer_words,
+            }
+        )
+    return metrics
 
 
 def parse_page_fill(bbox_xml: str) -> list[float]:
-    root = ET.fromstring(bbox_xml)
-    ratios: list[float] = []
-    for page in root.findall(".//{*}page"):
-        height = float(page.attrib["height"])
-        bottoms = [float(word.attrib["yMax"]) for word in page.findall(".//{*}word")]
-        ratios.append(round(max(bottoms, default=0.0) / height, 4) if height > 0 else 0.0)
-    return ratios
+    return [float(item["content_bottom_ratio"]) for item in parse_page_layout_metrics(bbox_xml)]
 
 
 def parse_args() -> argparse.Namespace:
@@ -492,7 +590,13 @@ def main() -> int:
         report_path = build_dir / f"build_report_{main_path.stem}.json"
         stdout_path = build_dir / f"build_stdout_{main_path.stem}.log"
 
-    errors, warnings = scan_sources(paper_dir, args.mode)
+    errors, warnings = scan_sources(paper_dir, main_path.name, args.mode)
+    recorder_path = build_dir / f"{main_path.stem}.fls"
+    try:
+        recorder_path.unlink(missing_ok=True)
+    except OSError as exc:
+        target = errors if args.mode == "submission" else warnings
+        target.append(f"cannot clear stale LaTeX recorder file: {type(exc).__name__}")
     question_audit, question_errors, question_warnings = audit_question_standalone(
         paper_dir, main_path, args.mode
     )
@@ -518,6 +622,11 @@ def main() -> int:
     log_errors, log_warnings = scan_log(log_text, args.mode)
     errors.extend(log_errors)
     warnings.extend(log_warnings)
+    recorder_report, recorder_errors, recorder_warnings = audit_recorded_tex_sources(
+        paper_dir, main_path.name, build_dir, args.mode
+    )
+    errors.extend(recorder_errors)
+    warnings.extend(recorder_warnings)
 
     pdf_path = build_dir / f"{main_path.stem}.pdf"
     pages: int | None = None
@@ -529,6 +638,7 @@ def main() -> int:
     file_size_bytes: int | None = None
     sha256: str | None = None
     page_text_fill: list[float] = []
+    page_layout_metrics: list[dict[str, object]] = []
     if pdf_path.is_file():
         metadata, metadata_warning = pdf_metadata(pdf_path)
         if metadata_warning:
@@ -544,15 +654,26 @@ def main() -> int:
         pdf_author = str(author_value) if author_value is not None else None
         file_size_bytes = pdf_path.stat().st_size
         sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
-        if artifact_class == "question_standalone":
-            page_text_fill, density_warning = pdf_text_page_fill(pdf_path)
-            if density_warning:
-                target = errors if args.mode == "submission" else warnings
-                target.append(density_warning)
-            elif len(page_text_fill) >= 2 and page_text_fill[-1] < 0.55:
-                target = errors if args.mode == "submission" else warnings
-                target.append(
-                    f"standalone final page uses only {page_text_fill[-1]:.1%} of page height; repair float placement or consolidate the section"
+        page_layout_metrics, density_warning = pdf_text_page_layout(pdf_path)
+        page_text_fill = [float(item["content_bottom_ratio"]) for item in page_layout_metrics]
+        if density_warning:
+            target = errors if args.mode == "submission" else warnings
+            target.append(density_warning)
+        elif artifact_class == "question_standalone" and len(page_text_fill) >= 2 and page_text_fill[-1] < 0.55:
+            target = errors if args.mode == "submission" else warnings
+            target.append(
+                f"standalone final page uses only {page_text_fill[-1]:.1%} of page height; repair float placement or consolidate the section"
+            )
+        elif artifact_class == "full_paper" and args.mode == "submission":
+            sparse_pages = [
+                str(item["page"])
+                for item in page_layout_metrics
+                if float(item["bottom_blank_ratio"]) > 0.45
+            ]
+            if sparse_pages:
+                warnings.append(
+                    "full-paper pages with more than 45% lower whitespace require an explicit page-level disposition: "
+                    + ", ".join(sparse_pages)
                 )
     else:
         errors.append("compiled PDF is missing")
@@ -593,6 +714,8 @@ def main() -> int:
         "pdf_author": pdf_author,
         "sha256": sha256,
         "page_text_fill": page_text_fill,
+        "page_layout_metrics": page_layout_metrics,
+        **recorder_report,
         "question_audit": question_audit,
         "errors": sorted(set(errors)),
         "warnings": sorted(set(warnings)),

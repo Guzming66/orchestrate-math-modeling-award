@@ -11,6 +11,7 @@ from pathlib import Path
 
 from build_latex import strip_tex_comments
 from evidence_utils import artifact_errors, split_ids
+from latex_sources import loaded_tex_sources
 
 
 STRONG_CLAIM = re.compile(r"首创|首次提出|\bnovel\b|\binnovative\b", re.IGNORECASE)
@@ -121,8 +122,10 @@ def validate_paper_innovation(workspace: Path) -> dict[str, object]:
                 known_markers.add(anchor)
         errors.extend(artifact_errors(workspace, row, f"{claim_id} paper mapping"))
 
-    paper_sections = workspace / "paper" / "sections"
-    for path in paper_sections.rglob("*.tex") if paper_sections.is_dir() else []:
+    paper_root = workspace / "paper"
+    for path in loaded_tex_sources(paper_root):
+        if "sections" not in path.relative_to(paper_root).parts:
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for line_number, line in enumerate(text.splitlines(), start=1):
             visible = strip_tex_comments(line)

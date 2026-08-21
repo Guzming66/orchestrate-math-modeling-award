@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 from build_latex import find_placeholders, strip_tex_comments
+from latex_sources import tex_source_closure
 
 
 INPUT_PATTERN = re.compile(r"\\input\{(sections/questions/[^}]+)\}")
@@ -47,6 +48,17 @@ def validate_paper_question_coverage(workspace: Path) -> dict[str, object]:
         str(item.get("question_id", "")).strip() if isinstance(item, dict) else ""
         for item in questions
     ]
+
+    main_path = workspace / "paper" / "main.tex"
+    try:
+        main_text = strip_tex_comments(main_path.read_text(encoding="utf-8"))
+    except OSError:
+        main_text = ""
+        errors.append("paper/main.tex is missing")
+    if not re.search(r"\\input\s*\{\s*generated/question_sections(?:\.tex)?\s*\}", main_text):
+        errors.append("paper/main.tex does not load generated/question_sections.tex")
+    _, closure_issues = tex_source_closure(workspace / "paper")
+    errors.extend(f"LaTeX source closure: {issue}" for issue in closure_issues)
 
     loader_path = workspace / "paper" / "generated" / "question_sections.tex"
     try:

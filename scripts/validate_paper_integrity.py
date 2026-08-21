@@ -13,6 +13,7 @@ from pathlib import Path
 
 from build_latex import INTERNAL_PAPER_PATTERNS, strip_tex_comments
 from evidence_utils import artifact_errors, split_ids
+from latex_sources import loaded_tex_sources
 
 
 CHAT_LABELS = {
@@ -23,6 +24,20 @@ CHAT_PATTERNS = tuple(
     (re.compile(pattern, re.IGNORECASE), label)
     for pattern, label in INTERNAL_PAPER_PATTERNS if label in CHAT_LABELS
 )
+CONTROL_META_PATTERNS = (
+    (re.compile(r"(?:总控|控制层)(?:验收|审核|门禁|结论|记录)"), "control-plane review language"),
+    (re.compile(r"(?:工作流|流程)(?:阶段|状态).{0,8}(?:已|为)(?:完成|通过|冻结|提交)"), "workflow-state language"),
+    (re.compile(r"(?:上游|下游)(?:接口|结果).{0,8}(?:冻结|验收|放行)"), "internal interface-state language"),
+    (re.compile(r"(?:审计|复现|证据)(?:台账|状态).{0,8}(?:完成|通过|闭合)"), "internal audit-state language"),
+    (re.compile(r"(?:本小问|本问题|该模型|该结果).{0,12}(?:具备|达到)(?:交付|提交)(?:条件|资格)"), "internal handoff language"),
+    (re.compile(r"跨问题一致性核对"), "control-plane cross-question audit heading"),
+    (re.compile(r"最短充分验证"), "internal evidence-budget terminology"),
+    (re.compile(r"向后续(?:问题|小问)传递"), "internal downstream-transfer terminology"),
+    (re.compile(r"本问没有规定必须.{0,16}(?:传递|输出|沿用)"), "internal question-contract commentary"),
+)
+CJK_REPEAT = re.compile(r"(?P<phrase>[\u3400-\u9fff]{2,8})(?P=phrase)")
+# Repeated two-character idioms can be intentional; keep the allowlist narrow.
+CJK_REPEAT_ALLOWLIST = {"人人", "年年", "天天", "时时", "处处", "事事", "层层", "步步"}
 VAGUE_SENTENCES = (
     re.compile(r"(?:结果|效果|性能)(?:较为|非常|十分)?(?:良好|优秀|理想)"),
     re.compile(r"精度(?:较高|很高|显著提高)"),
@@ -44,10 +59,13 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 def paper_sources(workspace: Path) -> list[Path]:
     paper = workspace / "paper"
-    return sorted(
-        path for path in paper.rglob("*.tex")
-        if "build" not in path.relative_to(paper).parts and path.name != "ai_usage_details.tex"
-    )
+    sources = loaded_tex_sources(paper)
+    if not sources and paper.is_dir():
+        sources = [
+            path for path in paper.rglob("*.tex")
+            if "build" not in path.relative_to(paper).parts
+        ]
+    return [path for path in sources if path.name != "ai_usage_details.tex"]
 
 
 def visible_text(path: Path) -> str:
@@ -60,6 +78,17 @@ def prose(text: str) -> str:
     text = re.sub(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?", " ", text)
     text = re.sub(r"[{}$&_^~#%]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def adjacent_cjk_repetitions(text: str) -> list[str]:
+    """Return high-confidence adjacent repeated Chinese phrases."""
+    return sorted(
+        {
+            match.group("phrase")
+            for match in CJK_REPEAT.finditer(prose(text))
+            if match.group("phrase") not in CJK_REPEAT_ALLOWLIST
+        }
+    )
 
 
 def validate_traceability(workspace: Path) -> list[str]:
@@ -131,6 +160,11 @@ def validate_paper_integrity(workspace: Path) -> dict[str, object]:
         for pattern, label in CHAT_PATTERNS:
             if pattern.search(text):
                 errors.append(f"{rel}: {label}")
+        for pattern, label in CONTROL_META_PATTERNS:
+            if pattern.search(text):
+                errors.append(f"{rel}: {label}")
+        for phrase in adjacent_cjk_repetitions(text):
+            errors.append(f"{rel}: adjacent repeated Chinese phrase '{phrase}{phrase}'")
         clean = prose(text)
         for sentence in re.split(r"[。！？!?]", clean):
             if len(sentence.strip()) < 8:

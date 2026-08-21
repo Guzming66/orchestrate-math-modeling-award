@@ -1,4 +1,4 @@
 interface:
   display_name: "数学建模竞赛总控"
-  short_description: "逐问题面契约、跨问防过期、隔离复现与 PDF 终审"
-  default_prompt: "使用 $orchestrate-math-modeling 按原题逐问冻结任务与依赖，完成证据化建模、跨问结果快照、隔离复现和直接 LaTeX 写作，并让最终 PDF 通过逐页哈希绑定的视觉终审。"
+  short_description: "逐问证据建模、论文创新与 PDF 终审"
+  default_prompt: "使用 $orchestrate-math-modeling 核验当届规则，按原题逐问冻结任务与依赖，从最简单的充分方案完成建模、创新主张、跨问快照、隔离复现和直接 LaTeX 写作，并让正文、图稿与最终 PDF 通过证据绑定的终审。"

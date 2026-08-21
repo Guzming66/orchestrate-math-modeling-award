@@ -47,7 +47,7 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine pdflatex --mode
 
 构建工具调用 `latexmk`，自动完成必要的 BibTeX 轮次，不依赖 Pandoc。草稿模式允许明确的标题和队号占位符，但构建报告把产物标记为 `review_only` 并逐项告警；不得把它称为最终稿。提交模式将占位符、空章节和未完成标记视为阻断项。
 
-构建器只负责直编 LaTeX、通用占位符/日志检查并报告页数、正文起点、纸张、大小和元数据。`finalize_submission.py` 只按已核验 `competition_profile.json` 执行纸张、页数、大小、目录、匿名性和附加材料门禁。自动检查不能替代匿名与附件人工审计。
+构建器强制启用 TeX `-recorder`，并把 `build/<main>.fls` 中实际载入的 `paper/` 内 `.tex` 与静态输入闭包核对；提交模式缺少 recorder 或出现静态闭包之外的本地 TeX 输入即阻断，草稿模式告警。`build_report*.json` 保存 `static_tex_sources`、`actual_tex_sources` 和 `extra_tex_sources`，因此 `\import`、`\subfile` 或其他未审计载入方式即使编译成功也不能绕过正文审查。构建器同时报告页数、正文起点、纸张、大小、元数据和全 PDF 的 `page_layout_metrics`。页面指标记录正文顶部/底部、下方空白比例、正文词数及排除的纯页码词数，只用于提示可疑留白，不是自动排版评分。`finalize_submission.py` 只按已核验 `competition_profile.json` 执行纸张、页数、大小、目录、匿名性和附加材料门禁。自动检查不能替代匿名、附件与整页视觉人工审计。
 
 每次新增公式、表格、图片、引用或章节后重新构建。不要等到最后才发现宏包、浮动体或交叉引用问题。读取 `paper/build/build_report.json`，修复所有 `errors`；逐项判断 `warnings`。
 
@@ -72,7 +72,9 @@ python <skill>/scripts/build_latex.py <branch>/paper --engine xelatex --main qNN
 - 图的生成脚本必须记录所用解释器与库版本；若 SciPilot 安装目录含 `.venv/Scripts/python.exe`，统一用该解释器运行其脚本。先在源代码中完成版面调整，再用 `export_figure(..., tight=False)` 导出正式矢量 PDF，避免 tight bounding box 改写既定物理尺寸；紧边界 PNG 仅作为视觉预览。最终只将通过 `check_figure.py --strict` 和实际 LaTeX 页面复核的 PDF/必要 PNG 纳入 `paper/figures/`。
 - 每幅图登记 `mechanism / data / diagnostic / decision` 中一个主要证据职责；删除装饰性流程图、重复表格内容的图和没有参与论证的输出。
 - 每个小题在 `presentation_plan` 中登记 `answer_anchor` 与 `validation_anchor`；二者必须真实存在于对应 `qNN.tex`，不能指向附录、全局章节或另一小问。`Qn` 必须加载 `qNN.tex`。
-- 依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系的小题必须登记一幅 `mechanism` 图；在 `presentation_plan.mechanism_visual_must_show` 列出图中必须同时出现的对象与关系。图与公式使用同一符号和坐标方向，结果曲线不能代替几何解释图。
+- `paper/main.tex` 必须显式加载 `generated/question_sections.tex`；该 loader 再按冻结顺序显式加载各问。论文语言、强主张、相似度、图表锚点和完整性审计只以从 `main.tex` 可达的实际 TeX 输入闭包为准，未加载草稿既不能帮助门禁通过，也不应制造误报。这个闭包只允许以 `paper/` 为运行根、工作区内静态字面量的 `\\input` / `\\include` / `\\InputIfFileExists`；动态宏路径、越界路径、非 `.tex` 正文输入和缺失的必需输入阻断。缺失的字面量 `\\InputIfFileExists`，以及路径相同的 `\\IfFileExists{...}{\\input{...}}{}` 可跳过。
+- 空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系按材料性主张填写 `geometry_claims`：每条绑定本问主张标签、至少两个对象、至少一个关系和带标签公式，并恰好选择已登记的 `mechanism` 图或具体免图理由。高视觉负荷主张必须有图；图与公式使用同一符号和坐标方向，结果曲线不能代替几何解释图；每条主张都要在最终 LaTeX 尺寸完成十秒可读性复核。
+- 每幅登记图（包括 `mechanism`）在 Payload 中登记与 LaTeX 实际一致的 `final_width`、至少 6 pt 的最终最小标签字号和最终尺寸复核；`data / diagnostic / decision` 图还要绑定本问 `claim_anchor`，登记样本/像素估计与过绘保真处理。每像素超过 2 个样本时，必须使用能保留该主张关键结构的包络、聚合、密度、透明度或等价方法，不能写“无需处理”。
 - 每问把最强验证落到真实 `\label`：段落、式、表或图均可。正文至少写清比较对象、配置/容差、观察差异和结论边界，不能只引用内部复算或“证书通过”。
 - 为公式、图、表和章节设置稳定且唯一的标签前缀，如 `eq:`、`fig:`、`tab:`、`sec:`。
 - 避免直接使用 Unicode 数学符号代替 LaTeX 命令，避免复制不可见空格和特殊连字符。
@@ -125,8 +127,9 @@ python <skill>/scripts/build_latex.py <workspace>/paper --engine xelatex --main 
 1. 先运行 `validate_paper_presentation.py`，再填完 `final-submission-controls.md` 的台账与门禁并运行 `finalize_submission.py`；不要单独把一次 LaTeX 编译成功当成终审通过。
 2. 确认编译报告无错误，并由 profile validator 确认未解析引用、缺字、占位符、严重超宽、纸张、匿名元数据、页数和文件大小均符合当届要求。
 3. 用 `pdfinfo` 复核页数、纸张尺寸和 PDF 元数据，并用文件系统复核大小。
-4. 用 `pdftoppm` 渲染全部页面，不只抽查第一页。
-5. 逐页检查裁切、重叠、孤行、空白页、浮动体漂移、大面积无意留白、空标题、公式编号、图表清晰度、页眉页码和匿名信息；图应尽量紧跟首次引用。
+4. 用 `pdftoppm` 渲染全部页面，不只抽查第一页；确认 `build_report.json` 的 `page_layout_metrics` 覆盖每一页。
+5. 逐页检查裁切、重叠、孤行、空白页、浮动体漂移、大面积无意留白、空标题、公式编号、图表最终尺寸与密度、页眉页码和匿名信息；图应尽量紧跟首次引用。下方空白比例超过 45% 的页面先修复，只有确属结尾材料或有意结构时才分别登记 `intentional_end_matter / intentional_structure` 并写具体说明；其余页面登记 `not_flagged`。
 6. 对照当届官方规则核对页数计数口径和额外材料位置。
 7. 对照已核验 profile 检查附录、支撑包、匿名性和大小；当届要求额外材料时按官方快照核对。
-8. 确认 `final_report.json` 与 `submission_manifest.json` 均为通过状态并保存论文/支撑包哈希；不提交临时辅助文件。
+8. 确认 `final_pdf_visual_review.json` 的 PDF 哈希、逐页渲染哈希和自动布局指标均对应当前文件；任一变化后重新复核受影响页面。
+9. 确认 `final_report.json` 与 `submission_manifest.json` 均为通过状态并保存论文/支撑包哈希；不提交临时辅助文件。

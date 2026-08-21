@@ -77,6 +77,16 @@ Profile 只决定检查责任，不规定正文篇幅。内部可以保存求根
 
 ## 论文输出边界
 
-`audits/review_findings.json` schema v2 按小题覆盖 `scientific / implementation / statistical / uncertainty / claims`。统计 not_applicable 的理由、review 状态、证据哈希和检查命令都留在内部。
+`audits/review_findings.json` schema v3 按小题覆盖 `scientific / implementation / statistical / uncertainty / claims`。每个路由为 required 的审查，以及任何主动标记为 `status=pass` 的审查，都必须在 coverage 记录中保存：
+
+- `paper_anchor`：被检查主张在本问 `qNN.tex` 中的真实锚点；
+- `concrete_check`：对哪个定义、边界、公式、数值或结论做了什么具体检查；
+- `falsification_or_boundary_attack`：实际尝试推翻结论的反例、端点、外推、扰动或替代实现；
+- `outcome`：只能是 `no_material_issue` 或 `finding_recorded`；
+- `artifact_path + sha256 + command_or_check + checked_at`：可核对的审查证据。
+
+“已检查”“通过”“独立复核完成”不是审查证据；同一类审查在多问复制同一套泛化 rationale 也不放行。`outcome=finding_recorded` 必须存在相应 finding，`no_material_issue` 不得与同问同类 finding 并存。路由为 `not_applicable` 且保持 `status=not_applicable` 时只需具体理由，不得伪造攻击或 artifact 来显得完整。
+
+统计 not_applicable 的理由、review 状态、证据哈希和检查命令都留在内部。
 
 论文只呈现：采用了什么数学假设、验证了什么关键性质、观察到什么误差或边界，以及这些结果如何影响答案。不要呈现 Review Router、Evidence Profile、门禁或“某审查不适用”。

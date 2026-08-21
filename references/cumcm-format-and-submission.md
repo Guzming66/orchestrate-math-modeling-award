@@ -50,7 +50,7 @@ AI 规则可能逐届变化。`ai_usage_ledger.csv` 用于把每次实质使用�
 |---|---|---|
 | 由 `paper/main.tex` 直接构建 | 构建入口固定 | 无平行 Word/Markdown 正文 |
 | 纸张、页数、大小、目录 | `competition_profile.json` + `pdfinfo` + 构建报告 | profile 的官方快照真实有效，赛区无补充要求 |
-| 页边距 | LaTeX 模板参数与渲染检查 | 密集图表未侵入边距，参数与 profile 一致 |
+| 页边距与页面平衡 | LaTeX 模板参数、逐页 `page_layout_metrics` 与渲染检查 | 密集图表未侵入边距；稀疏页确属有意结构/结尾材料而非浮动体漂移，参数与 profile 一致 |
 | 摘要/前置页 | 模板页数标记 + profile 上限 | 摘要确有标题、关键词、方法和结果 |
 | 匿名 PDF 元数据 | profile 要求为匿名时检查 Author | 题注、代码注释、路径、文件名和图片中无身份 |
 | 引用与交叉引用 | 编译日志门禁 | 每条关键来源真实且正文使用 |
@@ -65,8 +65,8 @@ AI 规则可能逐届变化。`ai_usage_ledger.csv` 用于把每次实质使用�
 1. 冻结代码、数据、随机种子和结果表；从干净目录复现。
 2. 更新正文、摘要和附录清单；直接编译 LaTeX。
 3. 运行 `validate_competition_profile.py` 和 `build_latex.py --mode submission`，修复所有 `errors`。
-4. 渲染 PDF 全部页面，逐页检查裁切、重叠、缺字、公式、宽表、页码和匿名。
+4. 渲染 PDF 全部页面，确认自动布局指标覆盖每页；逐页检查裁切、重叠、缺字、公式、宽表、量化图最终尺寸/密度、页码和匿名。下方空白比例超过 45% 的页面先修复，确属有意结尾材料或结构分页时再记录具体 disposition 与理由。
 5. 填写匿名词表和 `support_manifest.json`，由 `package_submission.py` 从附录引用的同版本文件生成支撑 ZIP，并扫描身份、路径、元数据和凭据。
 6. 当届规则要求额外说明时，按官方要求生成、命名和提交。
-7. 由三名队员分别核对：规则/匿名、数值/复现、论文/附件；按 `review_route.json` 把科学、实现、统计、不确定性和主张审查统一写入 `audits/review_findings.json`。
+7. 由三名队员分别核对：规则/匿名、数值/复现、论文/附件；按 `review_route.json` 把科学、实现、统计、不确定性和主张审查统一写入 schema v3 `audits/review_findings.json`，每个 pass 记录论文锚点、具体检查、证伪/边界攻击、outcome 和真实 artifact。
 8. 运行 `finalize_submission.py`；上传后核对系统中的文件大小和最终清单哈希，不再修改对应文件。

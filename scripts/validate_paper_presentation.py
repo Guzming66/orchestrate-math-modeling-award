@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 from build_latex import INTERNAL_PAPER_PATTERNS, strip_tex_comments
+from latex_sources import loaded_tex_sources
 
 
 FORBIDDEN_KEYS = {
@@ -43,7 +44,7 @@ QUESTION_KEYS = {
     "question_id", "evidence_profile", "problem_summary", "assumptions", "core_model",
     "derivation_summary", "algorithm_summary", "key_results", "comparison_summary",
     "validation_summary", "sensitivity_and_limits", "precision_policy", "complexity_value",
-    "presentation_plan", "paper_section", "figures", "citations",
+    "presentation_plan", "geometry_claims", "paper_section", "figures", "citations",
 }
 PRECISION_KEYS = {"display_rule", "justification", "dominant_uncertainty"}
 COMPLEXITY_KEYS = {"mode", "added_complexity", "structural_need", "incremental_gain", "decision"}
@@ -53,6 +54,14 @@ PRESENTATION_KEYS = {
     "mechanism_visual_reason", "mechanism_visual_must_show",
 }
 FIGURE_KEYS = {"path", "role", "supported_claim", "source_data", "generator", "paper_anchor"}
+FIGURE_KEYS |= {
+    "claim_anchor", "final_width", "minimum_label_pt", "samples_per_pixel",
+    "overplot_handling", "final_size_reviewed",
+}
+GEOMETRY_CLAIM_KEYS = {
+    "claim_anchor", "objects", "relations", "formula_anchor", "figure_anchor",
+    "not_needed_reason", "placement", "ten_second_takeaway", "final_size_reviewed",
+}
 COMPLEXITY_MODES = {"no_extra_complexity", "semantics_required", "incremental_change"}
 EVIDENCE_FORMS = {"prose", "equation", "table", "figure"}
 MECHANISM_VISUAL_MODES = {"required", "not_applicable"}
@@ -88,13 +97,46 @@ def latex_reference_exists(source_text: str, label: str) -> bool:
 
 
 def figure_caption(source_text: str, label: str) -> str | None:
-    for match in re.finditer(r"\\begin\{figure\*?\}(.*?)\\end\{figure\*?\}", source_text, re.DOTALL):
-        body = match.group(1)
-        if not latex_label_exists(body, label):
-            continue
+    body = figure_body(source_text, label)
+    if body is not None:
         caption = re.search(r"\\caption(?:\[[^{}]*\])?\{([^{}]+)\}", body, re.DOTALL)
         return re.sub(r"\s+", " ", caption.group(1)).strip() if caption else None
     return None
+
+
+def figure_body(source_text: str, label: str) -> str | None:
+    for match in re.finditer(r"\\begin\{figure\*?\}(.*?)\\end\{figure\*?\}", source_text, re.DOTALL):
+        if latex_label_exists(match.group(1), label):
+            return match.group(1)
+    return None
+
+
+def latex_figure_widths(source_text: str, label: str) -> set[str]:
+    body = figure_body(source_text, label)
+    if body is None:
+        return set()
+    widths = set()
+    for options in re.findall(r"\\includegraphics\s*\[([^]]*)\]", body, re.DOTALL):
+        match = re.search(r"(?:^|,)\s*width\s*=\s*([^,]+)", options)
+        if match:
+            widths.add(re.sub(r"\s+", "", match.group(1)))
+    widths.update(
+        re.sub(r"\s+", "", value)
+        for value in re.findall(r"\\resizebox\s*\{([^{}]+)\}\s*\{[^{}]*\}", body)
+    )
+    return widths
+
+
+def latex_formula_label_exists(source_text: str, label: str) -> bool:
+    environments = "equation|align|gather|multline|flalign|alignat"
+    return any(
+        latex_label_exists(match.group(1), label)
+        for match in re.finditer(
+            rf"\\begin\{{(?:{environments})\*?\}}(.*?)\\end\{{(?:{environments})\*?\}}",
+            source_text,
+            re.DOTALL,
+        )
+    )
 
 
 def reject_unknown(mapping: dict[str, object], allowed: set[str], location: str, errors: list[str]) -> None:
@@ -126,13 +168,14 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
     errors: list[str] = []
     warnings: list[str] = []
     paper_root = workspace / "paper"
+    loaded_sources = loaded_tex_sources(paper_root)
     paper_source_text = "\n".join(
         strip_tex_comments(path.read_text(encoding="utf-8", errors="replace"))
-        for path in paper_root.rglob("*.tex") if "build" not in path.relative_to(paper_root).parts
+        for path in loaded_sources
     ) if paper_root.is_dir() else ""
 
-    if payload.get("schema_version") != 3:
-        errors.append("paper_payload.json schema_version must be 3")
+    if payload.get("schema_version") != 4:
+        errors.append("paper_payload.json schema_version must be 4")
     if payload.get("status") != "ready":
         errors.append("paper payload is not ready")
     ready = payload.get("status") == "ready"
@@ -186,6 +229,11 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
             for figure_index, figure in enumerate(figures, start=1):
                 if isinstance(figure, dict):
                     reject_unknown(figure, FIGURE_KEYS, f"{label}/figure[{figure_index}]", errors)
+        geometry_claims = item.get("geometry_claims", [])
+        if isinstance(geometry_claims, list):
+            for claim_index, claim in enumerate(geometry_claims, start=1):
+                if isinstance(claim, dict):
+                    reject_unknown(claim, GEOMETRY_CLAIM_KEYS, f"{label}/geometry_claim[{claim_index}]", errors)
         if not ready:
             continue
 
@@ -285,13 +333,13 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
         geometry_text = " ".join(
             str(item.get(field, "")) for field in ("problem_summary", "core_model", "derivation_summary")
         )
-        if GEOMETRY_SIGNAL.search(geometry_text) and visual_mode != "required":
-            errors.append(f"{label}: geometry/trajectory/visibility reasoning requires a mechanism visual")
+        geometry_detected = bool(GEOMETRY_SIGNAL.search(geometry_text))
 
         if not isinstance(figures, list):
             errors.append(f"{label}: figures is not an array")
             figures = []
         mechanism_figure_count = 0
+        figure_roles_by_anchor: dict[str, str] = {}
         supported_claims: set[str] = set()
         for figure_index, figure in enumerate(figures, start=1):
             figure_label = f"{label}/figure[{figure_index}]"
@@ -319,6 +367,8 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
             if role == "mechanism" and "scipilot" in generator:
                 errors.append(f"{figure_label}: SciPilot is for source-backed quantitative figures, not mechanism diagrams")
             paper_anchor = str(figure.get("paper_anchor", "")).strip()
+            if paper_anchor:
+                figure_roles_by_anchor[paper_anchor] = role
             if paper_anchor and not latex_label_exists(paper_source_text, paper_anchor):
                 errors.append(f"{figure_label}: paper_anchor is not present in paper LaTeX: {paper_anchor}")
             elif paper_anchor:
@@ -338,9 +388,95 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
             else:
                 if not figure_path.is_file():
                     errors.append(f"{figure_label}: figure file is missing")
+            final_width = str(figure.get("final_width", "")).strip()
+            actual_widths = latex_figure_widths(paper_source_text, paper_anchor)
+            if not final_width:
+                errors.append(f"{figure_label}: figure final_width is empty")
+            elif re.sub(r"\s+", "", final_width) not in actual_widths:
+                errors.append(
+                    f"{figure_label}: declared final_width is not used by its LaTeX figure: {final_width}"
+                )
+            minimum_label_pt = figure.get("minimum_label_pt")
+            if isinstance(minimum_label_pt, bool) or not isinstance(minimum_label_pt, (int, float)):
+                errors.append(f"{figure_label}: minimum_label_pt must be numeric")
+            elif minimum_label_pt < 6:
+                errors.append(f"{figure_label}: minimum_label_pt must be at least 6 at final LaTeX size")
+            if figure.get("final_size_reviewed") is not True:
+                errors.append(f"{figure_label}: figure was not reviewed at its final LaTeX size")
+            if role in {"data", "diagnostic", "decision"}:
+                claim_anchor = str(figure.get("claim_anchor", "")).strip()
+                if not claim_anchor:
+                    errors.append(f"{figure_label}: quantitative figure claim_anchor is empty")
+                elif claim_anchor == paper_anchor:
+                    errors.append(f"{figure_label}: quantitative figure claim_anchor must identify the supported paper claim, not the figure itself")
+                elif not latex_label_exists(section_visible, claim_anchor):
+                    errors.append(f"{figure_label}: quantitative figure claim_anchor is not present in its own question section: {claim_anchor}")
+                samples_per_pixel = figure.get("samples_per_pixel")
+                if samples_per_pixel is not None and (
+                    isinstance(samples_per_pixel, bool) or not isinstance(samples_per_pixel, (int, float)) or samples_per_pixel < 0
+                ):
+                    errors.append(f"{figure_label}: samples_per_pixel must be a non-negative number or null")
+                handling = str(figure.get("overplot_handling", "")).strip()
+                if not handling:
+                    errors.append(f"{figure_label}: overplot_handling is empty")
+                elif isinstance(samples_per_pixel, (int, float)) and not isinstance(samples_per_pixel, bool) and samples_per_pixel > 2:
+                    if re.fullmatch(r"(?:none|no|not needed|无需|无|未处理|不处理)[。.]?", handling, re.IGNORECASE):
+                        errors.append(f"{figure_label}: more than two samples per pixel requires an overplot-preserving treatment")
             figure_count += 1
         if visual_mode == "required" and mechanism_figure_count == 0:
             errors.append(f"{label}: required mechanism visual is not registered in figures")
+
+        if not isinstance(geometry_claims, list):
+            errors.append(f"{label}: geometry_claims is not an array")
+            geometry_claims = []
+        if (geometry_detected or visual_mode == "required") and not geometry_claims:
+            errors.append(f"{label}: geometry reasoning must be mapped to at least one geometry claim")
+        seen_claim_anchors: set[str] = set()
+        for claim_index, claim in enumerate(geometry_claims, start=1):
+            claim_label = f"{label}/geometry_claim[{claim_index}]"
+            if not isinstance(claim, dict):
+                errors.append(f"{claim_label} is invalid")
+                continue
+            claim_anchor = str(claim.get("claim_anchor", "")).strip()
+            formula_anchor = str(claim.get("formula_anchor", "")).strip()
+            figure_anchor_value = claim.get("figure_anchor")
+            figure_anchor = str(figure_anchor_value).strip() if isinstance(figure_anchor_value, str) else ""
+            reason = claim.get("not_needed_reason")
+            objects = claim.get("objects")
+            relations = claim.get("relations")
+            if not claim_anchor or claim_anchor in seen_claim_anchors:
+                errors.append(f"{claim_label}: claim_anchor is empty or duplicated")
+            else:
+                seen_claim_anchors.add(claim_anchor)
+                if not latex_label_exists(section_visible, claim_anchor):
+                    errors.append(f"{claim_label}: claim_anchor is not present in its own question section: {claim_anchor}")
+            if not formula_anchor or not latex_formula_label_exists(section_visible, formula_anchor):
+                errors.append(f"{claim_label}: formula_anchor is not a labeled equation in its own question section: {formula_anchor}")
+            if claim_anchor and formula_anchor and claim_anchor == formula_anchor:
+                errors.append(f"{claim_label}: claim_anchor and formula_anchor must be distinct")
+            if not isinstance(objects, list) or len(objects) < 2 or not all(nonempty(value) for value in objects):
+                errors.append(f"{claim_label}: objects must name at least two geometric objects")
+            if not isinstance(relations, list) or not relations or not all(nonempty(value) for value in relations):
+                errors.append(f"{claim_label}: relations must name at least one geometric relation")
+            if bool(figure_anchor) == nonempty(reason):
+                errors.append(f"{claim_label}: provide exactly one of figure_anchor or not_needed_reason")
+            elif figure_anchor and figure_roles_by_anchor.get(figure_anchor) != "mechanism":
+                errors.append(f"{claim_label}: figure_anchor must reference a registered mechanism figure: {figure_anchor}")
+            high_visual_load = (
+                visual_mode == "required"
+                or isinstance(objects, list) and len(objects) >= 3
+                or isinstance(relations, list) and len(relations) >= 2
+            )
+            if high_visual_load and not figure_anchor:
+                errors.append(
+                    f"{claim_label}: high-load geometry must be discharged by a registered mechanism figure"
+                )
+            if not nonempty(claim.get("placement")):
+                errors.append(f"{claim_label}: placement is empty")
+            if not nonempty(claim.get("ten_second_takeaway")):
+                errors.append(f"{claim_label}: ten_second_takeaway is empty")
+            if claim.get("final_size_reviewed") is not True:
+                errors.append(f"{claim_label}: claim was not reviewed for ten-second readability at final LaTeX size")
 
     if set(expected_profiles) != seen:
         missing = set(expected_profiles) - seen
@@ -350,8 +486,9 @@ def validate_paper_presentation(workspace: Path) -> dict[str, object]:
         if extra:
             errors.append(f"paper payload contains unknown questions: {', '.join(sorted(extra))}")
 
-    paper_sections = workspace / "paper" / "sections"
-    for path in paper_sections.rglob("*.tex") if paper_sections.is_dir() else []:
+    for path in loaded_sources:
+        if "sections" not in path.relative_to(paper_root).parts:
+            continue
         visible = strip_tex_comments(path.read_text(encoding="utf-8", errors="replace"))
         for pattern, message in META_LANGUAGE:
             if pattern.search(visible):

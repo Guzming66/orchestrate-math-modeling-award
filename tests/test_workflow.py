@@ -16,7 +16,14 @@ SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from finalize_submission import check_ai_compliance, check_data_provenance, finalize
-from build_latex import audit_question_standalone, classify_artifact, latex_environment, parse_page_fill, scan_sources
+from build_latex import (
+    audit_question_standalone,
+    classify_artifact,
+    latex_environment,
+    parse_page_fill,
+    parse_page_layout_metrics,
+    scan_sources,
+)
 from migrate_workspace import migrate
 from package_submission import package_workspace
 from score_claim_benchmark import score
@@ -35,7 +42,9 @@ from validate_review_route import validate_review_route
 from validate_similarity_precheck import validate_similarity_precheck
 from validate_task_board import validate_task_board
 from audit_cumcm_corpus_style import build_cards, summarize
-from run_reproduction import run_reproduction
+from run_reproduction import run_reproduction, validate_contract
+from snapshot_environment import required_tools
+from preflight import declared_cli_flags
 
 
 STAMP = "2026-08-08T00:00:00+00:00"
@@ -74,6 +83,13 @@ class WorkflowTests(unittest.TestCase):
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
+
+    def load_paper_sections(self, root: Path, *relative_sections: str) -> None:
+        loader = root / "paper" / "generated" / "question_sections.tex"
+        loader.write_text(
+            "\n".join(f"\\input{{{relative}}}" for relative in relative_sections) + "\n",
+            encoding="utf-8",
+        )
 
     def make_artifact(self, root: Path, relative: str, text: str = "verified evidence\n") -> dict[str, str]:
         path = root / relative
@@ -123,6 +139,24 @@ class WorkflowTests(unittest.TestCase):
             errors, _ = scan_sources(paper, "submission")
             self.assertTrue(any("placeholder" in item for item in errors))
 
+    def test_submission_source_audit_rejects_dynamic_and_missing_required_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            paper = Path(temporary)
+            (paper / "main.tex").write_text(
+                "\\def\\questionfile{sections/q01.tex}\n"
+                "\\input{\\questionfile}\n"
+                "\\input{sections/missing.tex}\n"
+                "\\InputIfFileExists{sections/optional.tex}{}{}\n"
+                "\\IfFileExists{sections/guarded.tex}{\\input{sections/guarded.tex}}{}\n",
+                encoding="utf-8",
+            )
+            errors, warnings = scan_sources(paper, "main.tex", "submission")
+            self.assertEqual(warnings, [])
+            self.assertTrue(any("dynamic" in item and "questionfile" in item for item in errors))
+            self.assertTrue(any("sections/missing.tex" in item for item in errors))
+            self.assertFalse(any("sections/optional.tex" in item for item in errors))
+            self.assertFalse(any("sections/guarded.tex" in item for item in errors))
+
     def test_standalone_question_uses_strict_handoff_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             paper = Path(temporary)
@@ -161,16 +195,59 @@ class WorkflowTests(unittest.TestCase):
     def test_page_fill_parser_detects_sparse_final_page(self) -> None:
         bbox = (
             '<html xmlns="http://www.w3.org/1999/xhtml"><body><doc>'
-            '<page height="800"><word yMax="720">full</word></page>'
-            '<page height="800"><word yMax="320">sparse</word></page>'
+            '<page height="800"><word yMin="700" yMax="720">full</word></page>'
+            '<page height="800"><word yMin="300" yMax="320">sparse</word></page>'
             '</doc></body></html>'
         )
         self.assertEqual(parse_page_fill(bbox), [0.9, 0.4])
+
+    def test_page_layout_parser_excludes_lone_numeric_footer(self) -> None:
+        bbox = (
+            '<html xmlns="http://www.w3.org/1999/xhtml"><body><doc>'
+            '<page height="800">'
+            '<line yMin="100"><word yMin="100" yMax="500">正文</word></line>'
+            '<line yMin="760"><word yMin="760" yMax="775">12</word></line>'
+            '</page></doc></body></html>'
+        )
+        metrics = parse_page_layout_metrics(bbox)
+        self.assertEqual(metrics[0]["content_bottom_ratio"], 0.625)
+        self.assertEqual(metrics[0]["bottom_blank_ratio"], 0.375)
+        self.assertEqual(metrics[0]["word_count"], 1)
+        self.assertEqual(metrics[0]["excluded_footer_word_count"], 1)
 
     def test_latex_build_uses_reproducible_timestamp_environment(self) -> None:
         environment = latex_environment(Path("paper"))
         self.assertEqual(environment["SOURCE_DATE_EPOCH"], "946684800")
         self.assertEqual(environment["FORCE_SOURCE_DATE"], "1")
+
+    def test_environment_snapshot_requires_only_the_selected_build_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            tools = required_tools(root)
+            self.assertIn("xelatex", tools)
+            self.assertNotIn("pdflatex", tools)
+            self.assertNotIn("latexmk", tools)
+            self.assertNotIn("bibtex", tools)
+            (root / "paper" / "references.bib").write_text(
+                "@article{demo, title={Verified}}\n", encoding="utf-8"
+            )
+            self.assertIn("bibtex", required_tools(root))
+
+    def test_preflight_reads_companion_cli_without_importing_its_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            script = Path(temporary) / "validator.py"
+            script.write_text(
+                "import dependency_that_is_not_installed\n"
+                "import argparse\n"
+                "p = argparse.ArgumentParser()\n"
+                "p.add_argument('--check-dois', action='store_true')\n"
+                "p.add_argument('--report')\n",
+                encoding="utf-8",
+            )
+            flags, error = declared_cli_flags(script)
+            self.assertIsNone(error)
+            self.assertEqual(flags, {"--check-dois", "--report"})
 
     def test_cumcm_initializer_uses_lean_question_level_latex_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -301,6 +378,12 @@ class WorkflowTests(unittest.TestCase):
                             "evidence_sha256": source["sha256"],
                         }
                     )
+        source_path = root / source["artifact_path"]
+        source_path.write_text("\n".join(item["locator"] for item in profile["rule_bindings"]) + "\n", encoding="utf-8")
+        source_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
+        profile["sources"][0]["sha256"] = source_sha256
+        for binding in profile["rule_bindings"]:
+            binding["evidence_sha256"] = source_sha256
         (root / "compliance" / "competition_profile.json").write_text(
             json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
@@ -461,8 +544,10 @@ class WorkflowTests(unittest.TestCase):
                 "innovation/claim_experiments.csv",
                 "synthesis/innovation_claims.csv",
                 "synthesis/model_selection.json",
+                "synthesis/global_claim_certificates.json",
                 "synthesis/review_route.json",
                 "synthesis/paper_payload.json",
+                "synthesis/entity_lexicon.csv",
                 "audits/review_findings.json",
                 "compliance/ai_artifact_inventory.csv",
                 "synthesis/implementation_trace.csv",
@@ -474,9 +559,21 @@ class WorkflowTests(unittest.TestCase):
             ):
                 self.assertTrue((root / relative).is_file(), relative)
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 14)
+            self.assertEqual(manifest["workflow_version"], 15)
             payload = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["schema_version"], 3)
+            self.assertEqual(payload["schema_version"], 4)
+            review = json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8"))
+            self.assertEqual(review["schema_version"], 3)
+            visual_review = json.loads(
+                (root / "audits" / "presentation" / "final_pdf_visual_review.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(visual_review["schema_version"], 2)
+            self.assertEqual(visual_review["page_layout_metrics"], [])
+            reproduction = json.loads(
+                (root / "audits" / "reproduction" / "reproduction_status.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("entrypoint", reproduction["runner"])
+            self.assertIn("entrypoint_sha256", reproduction["runner"])
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["branches"], ["model-a"])
             self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
@@ -637,6 +734,7 @@ class WorkflowTests(unittest.TestCase):
             self.initialize(root)
             self.complete_single_claim(root)
             self.complete_paper_claim_mapping(root)
+            self.load_paper_sections(root, "sections/04_model.tex", "sections/05_solution.tex")
             (root / "paper" / "sections" / "05_solution.tex").write_text("% 我们首次提出占位注释。\n", encoding="utf-8")
             self.assertEqual(validate_paper_innovation(root)["status"], "pass")
             extra = root / "paper" / "sections" / "05_solution.tex"
@@ -674,7 +772,7 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 14)
+            self.assertEqual(manifest["workflow_version"], 15)
             self.assertEqual(manifest["workflow_stage"], "rule_verification")
             self.assertEqual(manifest["innovation_mode"], "standard")
             profile = json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8"))
@@ -718,10 +816,11 @@ class WorkflowTests(unittest.TestCase):
 
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
-            self.assertEqual(
-                json.loads((root / "compliance" / "competition_profile.json").read_text(encoding="utf-8")),
-                verified_profile,
+            migrated_profile = json.loads(
+                (root / "compliance" / "competition_profile.json").read_text(encoding="utf-8")
             )
+            self.assertEqual(migrated_profile["status"], "unverified")
+            self.assertTrue((root / "compliance" / "competition_profile_v9.json").is_file())
             self.assertTrue((root / "synthesis" / "model_selection_v9.json").is_file())
             self.assertTrue((root / "audits" / "review_findings_v9.json").is_file())
             self.assertEqual(
@@ -767,15 +866,17 @@ class WorkflowTests(unittest.TestCase):
             report = migrate(root)
             self.assertEqual(report["status"], "pass", report["errors"])
             self.assertEqual(json.loads((root / "synthesis" / "model_selection.json").read_text(encoding="utf-8")), model)
-            self.assertEqual(json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8")), review)
+            migrated_review = json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8"))
+            self.assertEqual(migrated_review["schema_version"], 3)
+            self.assertEqual(migrated_review["status"], "not_reviewed")
             migrated = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
-            self.assertEqual(migrated["schema_version"], 3)
+            self.assertEqual(migrated["schema_version"], 4)
             self.assertEqual(migrated["status"], "draft")
             self.assertEqual(migrated["questions"][0]["presentation_plan"]["answer_form"], "pending")
             self.assertEqual(migrated["questions"][0]["presentation_plan"]["mechanism_visual"], "pending")
             self.assertTrue((root / "synthesis" / "paper_payload_v11.json").is_file())
             manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["workflow_version"], 14)
+            self.assertEqual(manifest["workflow_version"], 15)
 
     def test_v12_migration_preserves_payload_and_adds_integrity_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -792,11 +893,15 @@ class WorkflowTests(unittest.TestCase):
             (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
             report = migrate(root)
             self.assertEqual(report["status"], "pass")
-            self.assertEqual(json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8")), payload)
+            migrated = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schema_version"], 4)
+            self.assertEqual(migrated["status"], "draft")
+            self.assertEqual(migrated["questions"][0]["question_id"], "Q1")
+            self.assertEqual(migrated["questions"][0]["geometry_claims"], [])
             self.assertTrue((root / "compliance" / "ai_artifact_inventory.csv").is_file())
             self.assertTrue((root / "synthesis" / "implementation_trace.csv").is_file())
             self.assertTrue((root / "audits" / "similarity" / "reference_corpus.csv").is_file())
-            self.assertEqual(json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))["workflow_version"], 14)
+            self.assertEqual(json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))["workflow_version"], 15)
             self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
 
     def test_v13_migration_invalidates_old_reproduction_trust(self) -> None:
@@ -822,8 +927,64 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(reproduction["status"], "pending")
             self.assertTrue((root / "audits" / "reproduction" / "reproduction_status_v13.json").is_file())
             review = json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8"))
+            self.assertEqual(review["schema_version"], 3)
             self.assertEqual(review["policy"], {"max_accepted_major": 1})
             self.assertEqual(validate_task_board(root / "shared" / "task_board.csv")["status"], "pass")
+
+    def test_v14_migration_reopens_v15_presentation_and_review_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for relative in ("compliance", "synthesis", "shared", "audits/reproduction", "audits/presentation", "innovation"):
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            (root / "competition_manifest.json").write_text(
+                json.dumps({
+                    "schema_version": 14,
+                    "workflow_version": 14,
+                    "competition": "CUMCM",
+                    "year": 2026,
+                    "problem": "A",
+                    "innovation_mode": "standard",
+                }),
+                encoding="utf-8",
+            )
+            legacy_payload = {
+                "schema_version": 3,
+                "status": "ready",
+                "questions": [{"question_id": "Q1", "figures": [{"role": "data"}]}],
+            }
+            (root / "synthesis" / "paper_payload.json").write_text(json.dumps(legacy_payload), encoding="utf-8")
+            (root / "audits" / "review_findings.json").write_text(
+                json.dumps({
+                    "schema_version": 2,
+                    "status": "reviewed",
+                    "policy": {"max_accepted_major": 1},
+                    "coverage": [],
+                    "findings": [],
+                }),
+                encoding="utf-8",
+            )
+            (root / "shared" / "task_board.csv").write_text("task_id,status\nold,done\n", encoding="utf-8")
+
+            report = migrate(root)
+            self.assertEqual(report["status"], "pass", report["errors"])
+            manifest = json.loads((root / "competition_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["workflow_version"], 15)
+            payload = json.loads((root / "synthesis" / "paper_payload.json").read_text(encoding="utf-8"))
+            self.assertEqual((payload["schema_version"], payload["status"]), (4, "draft"))
+            self.assertEqual(payload["questions"][0]["geometry_claims"], [])
+            figure = payload["questions"][0]["figures"][0]
+            self.assertEqual(figure["final_width"], "pending")
+            self.assertFalse(figure["final_size_reviewed"])
+            review = json.loads((root / "audits" / "review_findings.json").read_text(encoding="utf-8"))
+            self.assertEqual((review["schema_version"], review["status"]), (3, "not_reviewed"))
+            visual = json.loads(
+                (root / "audits" / "presentation" / "final_pdf_visual_review.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(visual["schema_version"], 2)
+            self.assertEqual(visual["page_layout_metrics"], [])
+            self.assertTrue((root / "synthesis" / "paper_payload_v14.json").is_file())
+            self.assertTrue((root / "audits" / "review_findings_v14.json").is_file())
+            self.assertTrue((root / "shared" / "task_board_v14.csv").is_file())
 
     def test_simple_baseline_can_win_model_selection_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1050,7 +1211,7 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = {
-                "schema_version": 3,
+                "schema_version": 4,
                 "status": "draft",
                 "questions": [
                     {
@@ -1101,11 +1262,12 @@ class WorkflowTests(unittest.TestCase):
                 "小规模枚举与网络流结果一致。\\n",
                 encoding="utf-8",
             )
+            self.load_paper_sections(root, "sections/questions/q01.tex")
             (root / "synthesis" / "model_selection.json").write_text(
                 json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "optimization"}]}), encoding="utf-8"
             )
             payload = {
-                "schema_version": 3,
+                "schema_version": 4,
                 "status": "ready",
                 "questions": [
                     {
@@ -1193,12 +1355,15 @@ class WorkflowTests(unittest.TestCase):
             section = root / "paper" / "sections" / "questions" / "q01.tex"
             section.write_text(
                 "\\section{问题一}\\label{sec:q1}\n"
-                "\\begin{figure}\\input{figures/q1_geometry.tex}\\caption{视线遮蔽几何关系}"
+                "\\subsection{遮蔽判据}\\label{claim:q1-geometry}\n"
+                "\\begin{equation}d(t)\\leq r_c\\label{eq:q1-geometry}\\end{equation}\n"
+                "\\begin{figure}\\resizebox{0.84\\linewidth}{!}{\\input{figures/q1_geometry.tex}}\\caption{视线遮蔽几何关系}"
                 "\\label{fig:q1-geometry}\\end{figure}\n"
                 "\\subsection{结果}\\label{sec:q1-answer}\n有效遮蔽持续 1.39 s。\n"
                 "\\subsection{验证}\\label{sec:q1-validation}\n加密计算与解析边界的差异小于 $10^{-4}$ s。\n",
                 encoding="utf-8",
             )
+            self.load_paper_sections(root, "sections/questions/q01.tex")
             (root / "synthesis" / "model_selection.json").write_text(
                 json.dumps({"schema_version": 2, "status": "frozen", "questions": [{"question_id": "Q1", "evidence_profile": "deterministic_numerical"}]}),
                 encoding="utf-8",
@@ -1238,12 +1403,23 @@ class WorkflowTests(unittest.TestCase):
                     "mechanism_visual_reason": "遮蔽判据依赖导弹、云团、圆柱和视线的空间关系",
                     "mechanism_visual_must_show": ["导弹—圆柱视线段", "云团球与遮蔽锥"],
                 },
+                "geometry_claims": [{
+                    "claim_anchor": "claim:q1-geometry",
+                    "objects": ["导弹—圆柱视线段", "云团球"],
+                    "relations": ["球与视线束相交时形成有效遮蔽"],
+                    "formula_anchor": "eq:q1-geometry",
+                    "figure_anchor": "fig:q1-geometry",
+                    "not_needed_reason": None,
+                    "placement": "判据公式之后、数值结果之前",
+                    "ten_second_takeaway": "云团必须覆盖通向有限圆柱目标的视线束，而非只覆盖中心线",
+                    "final_size_reviewed": True,
+                }],
                 "paper_section": "paper/sections/questions/q01.tex",
                 "figures": [],
                 "citations": [],
             }
             (root / "synthesis" / "paper_payload.json").write_text(
-                json.dumps({"schema_version": 3, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                json.dumps({"schema_version": 4, "status": "ready", "questions": [question]}, ensure_ascii=False),
                 encoding="utf-8",
             )
             report = validate_paper_presentation(root)
@@ -1260,10 +1436,13 @@ class WorkflowTests(unittest.TestCase):
                     "source_data": "题面坐标、云团半径和轨迹方程",
                     "generator": "TikZ",
                     "paper_anchor": "fig:q1-geometry",
+                    "final_width": "0.84\\linewidth",
+                    "minimum_label_pt": 7.0,
+                    "final_size_reviewed": True,
                 }
             ]
             (root / "synthesis" / "paper_payload.json").write_text(
-                json.dumps({"schema_version": 3, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                json.dumps({"schema_version": 4, "status": "ready", "questions": [question]}, ensure_ascii=False),
                 encoding="utf-8",
             )
             report = validate_paper_presentation(root)
@@ -1278,7 +1457,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(validate_paper_presentation(root)["status"], "pass")
             question["figures"][0]["generator"] = "SciPilot"
             (root / "synthesis" / "paper_payload.json").write_text(
-                json.dumps({"schema_version": 3, "status": "ready", "questions": [question]}, ensure_ascii=False),
+                json.dumps({"schema_version": 4, "status": "ready", "questions": [question]}, ensure_ascii=False),
                 encoding="utf-8",
             )
             self.assertTrue(any("not mechanism diagrams" in item for item in validate_paper_presentation(root)["errors"]))
@@ -1396,6 +1575,8 @@ class WorkflowTests(unittest.TestCase):
             root = Path(temp)
             self.initialize(root)
             evidence = self.make_artifact(root, "audits/review/critical.txt", "leakage found in split\n")
+            section = root / "paper" / "sections" / "questions" / "q01.tex"
+            section.write_text("\\section{问题一}\\label{sec:q1-review}\n直接结论。\n", encoding="utf-8")
             (root / "synthesis" / "review_route.json").write_text(
                 json.dumps(
                     {
@@ -1415,11 +1596,21 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             document = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "status": "reviewed",
                 "policy": {"max_accepted_major": 1},
                 "coverage": [
-                    {"question_id": "Q1", "review_type": kind, "status": "pass", "rationale": "independently checked"}
+                    {
+                        "question_id": "Q1",
+                        "review_type": kind,
+                        "status": "pass",
+                        "rationale": f"针对第一问执行{kind}专项审查并核对结论边界",
+                        "paper_anchor": "sec:q1-review",
+                        "concrete_check": f"逐项核对第一问的{kind}定义、实现细节和直接答案",
+                        "falsification_or_boundary_attack": f"改变第一问边界条件并尝试推翻{kind}结论",
+                        "outcome": "finding_recorded" if kind == "statistical" else "no_material_issue",
+                        **evidence,
+                    }
                     for kind in ("scientific", "implementation", "statistical", "uncertainty", "claims")
                 ],
                 "findings": [
@@ -1545,10 +1736,20 @@ class WorkflowTests(unittest.TestCase):
                 root / "synthesis" / "result_manifest.csv",
                 [{"result_id": "R1", "question_id": "Q1", "relative_path": "results/answer.txt"}],
             )
+            runner_script = root / "support" / "reproduce.py"
+            runner_script.parent.mkdir(exist_ok=True)
+            runner_script.write_text(
+                "from pathlib import Path\n"
+                "Path('results').mkdir(exist_ok=True)\n"
+                "Path('results/answer.txt').write_text('42\\n')\n",
+                encoding="utf-8",
+            )
             document = {
                 "schema_version": 2, "status": "ready", "reviewer": "independent-runner", "checked_at": STAMP,
                 "runner": {
-                    "argv": [sys.executable, "-c", "from pathlib import Path; Path('results').mkdir(exist_ok=True); Path('results/answer.txt').write_text('42\\n')"],
+                    "argv": [sys.executable, "support/reproduce.py"],
+                    "entrypoint": "support/reproduce.py",
+                    "entrypoint_sha256": hashlib.sha256(runner_script.read_bytes()).hexdigest(),
                     "working_directory": ".", "timeout_seconds": 30, "clean_paths": ["results"],
                 },
                 "expected_artifacts": [{"relative_path": "results/answer.txt", "sha256": hashlib.sha256(output.read_bytes()).hexdigest()}],
@@ -1556,17 +1757,94 @@ class WorkflowTests(unittest.TestCase):
             }
             (root / "audits" / "reproduction" / "reproduction_status.json").write_text(json.dumps(document), encoding="utf-8")
             self.assertEqual(run_reproduction(root)["status"], "pass")
-            document["runner"]["argv"] = [sys.executable, "-c", "print('did not generate result')"]
+            runner_script.write_text("print('did not generate result')\n", encoding="utf-8")
+            document["runner"]["entrypoint_sha256"] = hashlib.sha256(runner_script.read_bytes()).hexdigest()
             (root / "audits" / "reproduction" / "reproduction_status.json").write_text(json.dumps(document), encoding="utf-8")
             report = run_reproduction(root)
             self.assertEqual(report["status"], "block")
             self.assertTrue(any("hash-mismatched" in item for item in report["errors"]))
+
+    def test_reproduction_rejects_inline_unbound_and_dangerous_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            script = root / "support" / "reproduce.py"
+            script.parent.mkdir(exist_ok=True)
+            script.write_text("print('reproduce')\n", encoding="utf-8")
+            output = root / "results" / "answer.txt"
+            output.parent.mkdir()
+            output.write_text("42\n", encoding="utf-8")
+            document = {
+                "schema_version": 2,
+                "status": "ready",
+                "reviewer": "independent-runner",
+                "checked_at": STAMP,
+                "runner": {
+                    "argv": [sys.executable, "support/reproduce.py"],
+                    "entrypoint": "support/reproduce.py",
+                    "entrypoint_sha256": hashlib.sha256(script.read_bytes()).hexdigest(),
+                    "working_directory": ".",
+                    "timeout_seconds": 30,
+                    "clean_paths": ["results/./"],
+                },
+                "expected_artifacts": [{
+                    "relative_path": "results/../results/answer.txt",
+                    "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+                }],
+                "blocking_findings": [],
+            }
+            self.assertEqual(validate_contract(root, document)[0], [])
+
+            document["runner"]["argv"] = [sys.executable, "-c", "print(42)", "support/reproduce.py"]
+            self.assertTrue(any("inline command" in item for item in validate_contract(root, document)[0]))
+            document["runner"]["argv"] = [sys.executable, "support/reproduce.py"]
+            document["runner"]["entrypoint_sha256"] = "0" * 64
+            self.assertTrue(any("hash-mismatched" in item for item in validate_contract(root, document)[0]))
+            document["runner"]["entrypoint_sha256"] = hashlib.sha256(script.read_bytes()).hexdigest()
+
+            for clean_path, expected_fragment in (
+                (".", "workspace root"),
+                ("inputs/../inputs/cache", "protected inputs"),
+                ("support", "protected inputs"),
+                ("environment", "protected inputs"),
+                ("scratch", "named output"),
+            ):
+                document["runner"]["clean_paths"] = [clean_path]
+                self.assertTrue(
+                    any(expected_fragment in item for item in validate_contract(root, document)[0]),
+                    clean_path,
+                )
+
+            document["runner"].update({
+                "argv": [sys.executable, "../../support/reproduce.py"],
+                "working_directory": "results/run",
+                "clean_paths": ["results"],
+            })
+            errors = validate_contract(root, document)[0]
+            self.assertTrue(any(
+                "runner working directory or its ancestor" in item
+                for item in errors
+            ), errors)
+
+            document["runner"].update({
+                "argv": [sys.executable, "support/reproduce.py"],
+                "working_directory": ".",
+                "clean_paths": ["results"],
+            })
+            document["expected_artifacts"][0]["relative_path"] = "other/answer.txt"
+            other = root / "other" / "answer.txt"
+            other.parent.mkdir()
+            other.write_text("42\n", encoding="utf-8")
+            document["expected_artifacts"][0]["sha256"] = hashlib.sha256(other.read_bytes()).hexdigest()
+            self.assertTrue(any("outside the declared output" in item for item in validate_contract(root, document)[0]))
 
     def test_accepted_major_risk_requires_owner_scope_and_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self.initialize(root)
             evidence = self.make_artifact(root, "audits/review/major.txt")
+            section = root / "paper" / "sections" / "questions" / "q01.tex"
+            section.write_text("\\section{问题一}\\label{sec:q1-review}\n直接结论。\n", encoding="utf-8")
             reviews = {kind: {"status": "required", "rationale": "review"} for kind in ("scientific", "implementation", "statistical", "uncertainty", "claims")}
             (root / "synthesis" / "review_route.json").write_text(
                 json.dumps({"schema_version": 1, "status": "routed", "questions": [{"question_id": "Q1", "reviews": reviews}]}), encoding="utf-8"
@@ -1577,8 +1855,16 @@ class WorkflowTests(unittest.TestCase):
                 "resolution": "restrict conclusion", **evidence,
             }
             document = {
-                "schema_version": 2, "status": "reviewed", "policy": {"max_accepted_major": 1},
-                "coverage": [{"question_id": "Q1", "review_type": kind, "status": "pass", "rationale": "review"} for kind in reviews],
+                "schema_version": 3, "status": "reviewed", "policy": {"max_accepted_major": 1},
+                "coverage": [{
+                    "question_id": "Q1", "review_type": kind, "status": "pass",
+                    "rationale": f"针对第一问执行{kind}专项审查并限定结论范围",
+                    "paper_anchor": "sec:q1-review",
+                    "concrete_check": f"逐项核对第一问的{kind}定义、实现和直接答案",
+                    "falsification_or_boundary_attack": f"改变第一问边界条件并尝试推翻{kind}结论",
+                    "outcome": "finding_recorded" if kind == "scientific" else "no_material_issue",
+                    **evidence,
+                } for kind in reviews],
                 "findings": [finding],
             }
             (root / "audits" / "review_findings.json").write_text(json.dumps(document), encoding="utf-8")
@@ -1589,14 +1875,75 @@ class WorkflowTests(unittest.TestCase):
 
     def test_visual_reviews_are_bound_to_rendered_page_hashes(self) -> None:
         digest = "a" * 64
+        metric = {
+            "page": 1,
+            "content_top_ratio": 0.1,
+            "content_bottom_ratio": 0.8,
+            "bottom_blank_ratio": 0.2,
+            "word_count": 120,
+            "excluded_footer_word_count": 1,
+        }
         document = {
             "page_reviews": [{
-                "page": 1, "image_sha256": digest, "status": "pass", "reviewer": "page-reviewer", "checked_at": STAMP,
-                "checks": {"crop_and_overlap": "pass", "fonts_and_symbols": "pass", "equations_tables_figures": "pass", "pagination_and_anonymity": "pass"},
+                "page": 1,
+                "image_path": "audits/presentation/final_pdf_pages/page-001.png",
+                "image_sha256": digest,
+                "status": "pass",
+                "reviewer": "page-reviewer",
+                "checked_at": STAMP,
+                "checks": {
+                    "crop_and_overlap": "pass",
+                    "fonts_and_symbols": "pass",
+                    "equations_tables_figures": "pass",
+                    "plot_readability_and_density": "pass",
+                    "float_flow_and_page_balance": "pass",
+                    "pagination_and_anonymity": "pass",
+                },
+                "automated_metrics": metric,
+                "layout_disposition": "not_flagged",
+                "notes": "页面布局均衡",
             }]
         }
-        self.assertEqual(validate_review_records(document, [digest]), [])
-        self.assertTrue(any("changed" in item for item in validate_review_records(document, ["b" * 64])))
+        self.assertEqual(validate_review_records(document, [digest], [metric]), [])
+        self.assertTrue(any("changed" in item for item in validate_review_records(document, ["b" * 64], [metric])))
+
+    def test_sparse_visual_review_requires_intentional_disposition_and_note(self) -> None:
+        digest = "a" * 64
+        metric = {
+            "page": 1,
+            "content_top_ratio": 0.1,
+            "content_bottom_ratio": 0.35,
+            "bottom_blank_ratio": 0.65,
+            "word_count": 45,
+            "excluded_footer_word_count": 1,
+        }
+        review = {
+            "page": 1,
+            "image_path": "audits/presentation/final_pdf_pages/page-001.png",
+            "image_sha256": digest,
+            "status": "pass",
+            "checks": {
+                "crop_and_overlap": "pass",
+                "fonts_and_symbols": "pass",
+                "equations_tables_figures": "pass",
+                "plot_readability_and_density": "pass",
+                "float_flow_and_page_balance": "pass",
+                "pagination_and_anonymity": "pass",
+            },
+            "automated_metrics": metric,
+            "layout_disposition": "not_flagged",
+            "reviewer": "page-reviewer",
+            "checked_at": STAMP,
+            "notes": "",
+        }
+        document = {"page_reviews": [review]}
+        errors = validate_review_records(document, [digest], [metric])
+        self.assertTrue(any("explicit intentional layout disposition" in item for item in errors))
+        review["layout_disposition"] = "intentional_end_matter"
+        errors = validate_review_records(document, [digest], [metric])
+        self.assertTrue(any("concrete note" in item for item in errors))
+        review["notes"] = "参考文献在本页结束，留白由文献条目自然收束形成。"
+        self.assertEqual(validate_review_records(document, [digest], [metric]), [])
 
     def test_pdftoppm_resolver_returns_runnable_binary_or_native_command(self) -> None:
         executable = resolve_pdftoppm()
@@ -1652,6 +1999,40 @@ class WorkflowTests(unittest.TestCase):
             report = validate_task_board(board)
             self.assertEqual(report["status"], "block")
             self.assertTrue(any("cycle" in item for item in report["errors"]))
+
+    def test_v15_task_board_requires_core_tasks_strict_booleans_and_dynamic_models(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.initialize(root)
+            board = root / "shared" / "task_board.csv"
+            with board.open(encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            for row in rows:
+                if row["task_id"] == "model-a":
+                    row["task_id"] = "model-geometry"
+                    row["assigned_path"] = "branches/model-geometry"
+                dependencies = ["model-geometry" if item == "model-a" else item for item in row["depends_on"].split(";")]
+                row["depends_on"] = ";".join(dependencies)
+            self.write_csv_rows(board, rows)
+            self.assertEqual(validate_task_board(board)["status"], "pass")
+
+            rows[0]["blocking"] = "yes"
+            self.write_csv_rows(board, rows)
+            report = validate_task_board(board)
+            self.assertTrue(any("exactly true or false" in item for item in report["errors"]))
+
+            rows[0]["blocking"] = "true"
+            rows = [row for row in rows if row["task_id"] != "reproduction"]
+            self.write_csv_rows(board, rows)
+            report = validate_task_board(board)
+            self.assertTrue(any("missing required task IDs" in item and "reproduction" in item for item in report["errors"]))
+
+            self.initialize(root)
+            with board.open(encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            rows = [row for row in rows if row["task_id"] != "baseline-failure"]
+            self.write_csv_rows(board, rows)
+            self.assertTrue(any("baseline-failure" in item for item in validate_task_board(board)["errors"]))
 
     def package_fixture(self, root: Path, content: str) -> None:
         (root / "compliance").mkdir(parents=True)
@@ -1843,6 +2224,7 @@ class WorkflowTests(unittest.TestCase):
             implementation.write_text("def balance_constraint(x):\n    return sum(x)\n", encoding="utf-8")
             section = root / "paper" / "sections" / "questions" / "q01.tex"
             section.write_text("\\section{问题一}\n作为一个人工智能，以下给出答案。\n", encoding="utf-8")
+            self.load_paper_sections(root, "sections/questions/q01.tex")
             report = validate_paper_integrity(root)
             self.assertEqual(report["status"], "block")
             self.assertTrue(any("chat-assistant" in item for item in report["errors"]))
@@ -1874,6 +2256,7 @@ class WorkflowTests(unittest.TestCase):
             phrase = "针对观测序列中的周期变化我们构造分段状态变量并以滚动窗口完成参数更新"
             section = root / "paper" / "sections" / "questions" / "q01.tex"
             section.write_text("\\section{问题一}\n" + phrase * 3 + "\n", encoding="utf-8")
+            self.load_paper_sections(root, "sections/questions/q01.tex")
             excellent = root / "audits" / "similarity" / "corpus" / "E1.txt"
             template = root / "audits" / "similarity" / "corpus" / "T1.txt"
             excellent.write_text(phrase * 3, encoding="utf-8")

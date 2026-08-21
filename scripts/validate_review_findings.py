@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+from collections import defaultdict
 from pathlib import Path
 
 from evidence_utils import artifact_errors
@@ -12,6 +14,45 @@ from evidence_utils import artifact_errors
 
 REVIEW_TYPES = {"scientific", "implementation", "statistical", "uncertainty", "claims"}
 SEVERITIES = {"critical", "major", "minor", "suggestion"}
+GENERIC_COVERAGE_TEXT = re.compile(
+    r"^(?:review|reviewed|checked|independentlychecked|independentreviewcomplete|pass|"
+    r"通过|检查通过|已检查|独立检查|已完成审查|符合要求|不适用)$",
+    re.IGNORECASE,
+)
+
+
+def normalized_review_text(value: str) -> str:
+    value = re.sub(r"(?i)q\s*\d+|问题[一二三四五六七八九十百\d]+|第[一二三四五六七八九十百\d]+问", "<q>", value)
+    return re.sub(r"[^0-9A-Za-z\u3400-\u9fff]+", "", value).lower()
+
+
+def is_specific_review_text(value: str, minimum: int = 12) -> bool:
+    normalized = normalized_review_text(value)
+    return len(normalized) >= minimum and GENERIC_COVERAGE_TEXT.fullmatch(normalized) is None
+
+
+def question_paper_source(workspace: Path, question_id: str) -> Path | None:
+    payload = load(workspace / "synthesis" / "paper_payload.json")
+    questions = payload.get("questions")
+    if isinstance(questions, list):
+        for item in questions:
+            if not isinstance(item, dict) or str(item.get("question_id", "")).strip() != question_id:
+                continue
+            relative = str(item.get("paper_section", "")).replace("\\", "/").strip()
+            if relative:
+                candidate = (workspace / relative).resolve()
+                try:
+                    candidate.relative_to((workspace / "paper" / "sections").resolve())
+                except ValueError:
+                    return None
+                if candidate.is_file():
+                    return candidate
+    match = re.fullmatch(r"Q(\d+)", question_id, re.IGNORECASE)
+    if not match:
+        return None
+    number = int(match.group(1))
+    folder = workspace / "paper" / "sections" / "questions"
+    return next((path for path in (folder / f"q{number:02d}.tex", folder / f"q{number}.tex") if path.is_file()), None)
 
 
 def load(path: Path) -> dict[str, object]:
@@ -49,8 +90,8 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
     document = load(workspace / "audits" / "review_findings.json")
     errors: list[str] = []
     warnings: list[str] = []
-    if document.get("schema_version") != 2:
-        errors.append("review_findings.json schema_version must be 2")
+    if document.get("schema_version") != 3:
+        errors.append("review_findings.json schema_version must be 3")
     if document.get("status") != "reviewed":
         errors.append("independent review is not complete")
     policy = document.get("policy")
@@ -64,6 +105,8 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
         errors.append("review coverage cannot be checked without a completed review_route.json")
     coverage = document.get("coverage")
     covered: dict[tuple[str, str], str] = {}
+    coverage_outcomes: dict[tuple[str, str], str] = {}
+    rationale_uses: dict[tuple[str, str], list[tuple[str, str]]] = defaultdict(list)
     if not isinstance(coverage, list):
         coverage = []
     for item in coverage:
@@ -93,6 +136,44 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
             errors.append(f"{question_id}/{review_type} coverage is not closed")
         if not rationale:
             errors.append(f"{question_id}/{review_type} coverage rationale is empty")
+        elif not is_specific_review_text(rationale):
+            errors.append(f"{question_id}/{review_type} coverage rationale is generic")
+        else:
+            rationale_uses[(review_type, normalized_review_text(rationale))].append(key)
+
+        requires_evidence = route_status == "required" or status == "pass"
+        if requires_evidence:
+            paper_anchor = str(item.get("paper_anchor", "")).strip()
+            concrete_check = str(item.get("concrete_check", "")).strip()
+            attack = str(item.get("falsification_or_boundary_attack", "")).strip()
+            outcome = str(item.get("outcome", "")).strip().lower()
+            for field, value in (
+                ("paper_anchor", paper_anchor),
+                ("concrete_check", concrete_check),
+                ("falsification_or_boundary_attack", attack),
+            ):
+                if not value:
+                    errors.append(f"{question_id}/{review_type} coverage {field} is empty")
+            if concrete_check and not is_specific_review_text(concrete_check, minimum=16):
+                errors.append(f"{question_id}/{review_type} concrete_check is generic")
+            if attack and not is_specific_review_text(attack, minimum=16):
+                errors.append(f"{question_id}/{review_type} falsification_or_boundary_attack is generic")
+            if outcome not in {"no_material_issue", "finding_recorded"}:
+                errors.append(f"{question_id}/{review_type} coverage outcome is invalid")
+            else:
+                coverage_outcomes[key] = outcome
+            source = question_paper_source(workspace, question_id)
+            if source is None:
+                errors.append(f"{question_id}/{review_type} question paper source is missing")
+            elif paper_anchor and paper_anchor not in source.read_text(encoding="utf-8", errors="replace"):
+                errors.append(f"{question_id}/{review_type} paper_anchor is absent from its qNN.tex")
+            errors.extend(artifact_errors(workspace, item, f"{question_id}/{review_type} coverage evidence"))
+
+    for (review_type, _), uses in rationale_uses.items():
+        questions = {question for question, _ in uses}
+        if len(questions) >= 2:
+            rendered = ", ".join(f"{question}/{kind}" for question, kind in sorted(uses))
+            errors.append(f"copied coverage rationale across questions for {review_type}: {rendered}")
     missing = set(expected) - set(covered)
     if missing:
         rendered = ", ".join(f"{question}/{kind}" for question, kind in sorted(missing))
@@ -104,6 +185,7 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
         findings = []
     accepted_major = 0
     seen: set[str] = set()
+    finding_pairs: set[tuple[str, str]] = set()
     known_questions = {question for question, _ in expected}
     for index, finding in enumerate(findings, start=1):
         label = f"finding[{index}]"
@@ -125,6 +207,8 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
             errors.append(f"{label}: finding references unknown question")
         if review_type not in REVIEW_TYPES:
             errors.append(f"{label}: invalid review_type")
+        elif question_id:
+            finding_pairs.add((question_id, review_type))
         if severity not in SEVERITIES:
             errors.append(f"{label}: invalid severity")
         if status not in {"open", "closed", "accepted_risk"}:
@@ -147,6 +231,13 @@ def validate_review_findings(workspace: Path) -> dict[str, object]:
             warnings.append(f"{label}: {severity} finding remains open")
     if accepted_major > max_accepted_major:
         errors.append(f"accepted major risks exceed policy: {accepted_major} > {max_accepted_major}")
+    for key, outcome in coverage_outcomes.items():
+        has_finding = key in finding_pairs
+        rendered = f"{key[0]}/{key[1]}"
+        if outcome == "finding_recorded" and not has_finding:
+            errors.append(f"{rendered}: coverage says finding_recorded but no finding exists")
+        if outcome == "no_material_issue" and has_finding:
+            errors.append(f"{rendered}: coverage says no_material_issue but a finding is recorded")
 
     report = {
         "status": "pass" if not errors else "block",

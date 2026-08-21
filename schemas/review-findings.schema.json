@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/orchestrate-math-modeling/review-findings-v2.schema.json",
+  "$id": "https://example.invalid/orchestrate-math-modeling/review-findings-v3.schema.json",
   "title": "Routed independent review findings",
   "type": "object",
   "required": ["schema_version", "status", "policy", "coverage", "findings"],
   "properties": {
-    "schema_version": {"const": 2},
+    "schema_version": {"const": 3},
     "status": {"enum": ["not_reviewed", "reviewed"]},
     "policy": {
       "type": "object",
@@ -16,19 +16,49 @@
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["question_id", "review_type", "status", "rationale"],
         "properties": {
           "question_id": {"type": "string", "minLength": 1},
           "review_type": {"enum": ["scientific", "implementation", "statistical", "uncertainty", "claims"]},
           "status": {"enum": ["pass", "not_applicable"]},
-          "rationale": {"type": "string", "minLength": 1}
-        }
+          "rationale": {"type": "string", "minLength": 1},
+          "paper_anchor": {"type": "string"},
+          "concrete_check": {"type": "string"},
+          "falsification_or_boundary_attack": {"type": "string"},
+          "outcome": {"enum": ["no_material_issue", "finding_recorded"]},
+          "artifact_path": {"type": "string"},
+          "sha256": {"type": "string"},
+          "command_or_check": {"type": "string"},
+          "checked_at": {"type": "string"}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"status": {"const": "pass"}}, "required": ["status"]},
+            "then": {
+              "required": [
+                "paper_anchor", "concrete_check", "falsification_or_boundary_attack", "outcome",
+                "artifact_path", "sha256", "command_or_check", "checked_at"
+              ],
+              "properties": {
+                "paper_anchor": {"minLength": 1},
+                "concrete_check": {"minLength": 1},
+                "falsification_or_boundary_attack": {"minLength": 1},
+                "artifact_path": {"minLength": 1},
+                "sha256": {"pattern": "^[0-9a-fA-F]{64}$"},
+                "command_or_check": {"minLength": 1},
+                "checked_at": {"minLength": 1}
+              }
+            }
+          }
+        ]
       }
     },
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "finding_id", "question_id", "review_type", "severity", "summary",
           "affected_claim_or_result", "status", "resolution"

@@ -5,18 +5,18 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 # 数学建模竞赛总控
 
-本 Skill 是裁决与集成层，不是“自动获奖器”。目标是让规则、模型选择、创新主张、科学结论和提交文件都有可追溯证据，并让最简单的充分方案可以胜出。
+本 Skill 是 workflow v15 的裁决与集成层，不是“自动获奖器”。目标是让规则、模型选择、创新主张、强全域主张、科学结论和提交文件都有可追溯证据，并让最简单的充分方案可以胜出。
 
 ## 八个核心系统
 
 1. Competition Rule Engine：只执行当届官方来源支持的 Competition Profile v2。
 2. Model Selection Engine：按每个核心小题选择 Evidence Profile，记录基准模型、候选、拟合前理由、类型自适应证据、最终选择和淘汰理由。
 3. Innovation Claim Engine：允许“题意保真建模”和“基线失败后的最小改变”两条路径；模型数量和复杂度不产生创新信用。
-4. Scientific Review Engine：按小题路由科学、实现、统计、不确定性和主张审查，统一写入 `audits/review_findings.json`。
-5. Contest Paper Presentation Engine：用 `paper_payload.json` 隔离控制平面与论文正文，控制语言、篇幅、精度和图表信息密度。
+4. Scientific Review Engine：按小题路由科学、实现、统计、不确定性和主张审查；每个通过结论都绑定论文锚点、具体检查、证伪/边界攻击及真实 artifact。
+5. Contest Paper Presentation Engine：用 schema v4 `paper_payload.json` 隔离控制平面与论文正文，并管理逐条几何主张的可视化债务、所有图的最终尺寸可读性及量化图的过绘契约。
 6. Submission Finalizer：只执行已经结构化的规则与验证状态，直编 LaTeX、核对哈希、匿名性和要求的提交产物。
 7. Paper Integrity Engine：检查聊天/模板接缝、公式—代码—结果追踪、AI 使用双向覆盖和优秀论文/固定模板相似度预检。
-8. Execution Integrity Engine：用题面哈希契约约束小问范围，冻结跨问结果快照，在隔离副本实际重跑，并把最终 PDF 的逐页复核绑定到 PDF 与渲染哈希。
+8. Execution Integrity Engine：用题面哈希契约约束小问范围，为 first/earliest/global/optimal/full-domain 等强主张登记覆盖证书，冻结跨问结果快照，在隔离副本实际重跑，并把最终 PDF 的逐页复核绑定到 PDF、渲染哈希和页面布局指标。
 
 历史赛题 benchmark 是离线评估工具，不参与赛中终审，也不输出获奖率。
 
@@ -28,8 +28,8 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 - 规则核验：允许题意解析和标明 `unverified` 的草探，不允许冻结正式结论。
 - 探索：先完成强基线，再只为真实 failure 增加候选或创新改动。
-- 模型冻结：每个核心小题的 `model_selection.json` 通过后才合并结果。
-- 论文冻结：`paper_payload.json`、LaTeX 正文、结果、引用、创新表达和 Presentation Firewall 已经通过。
+- 模型冻结：每个核心小题的 `model_selection.json` 通过，先登记结果中拟使用的强全域主张及其覆盖证据，再合并结果。
+- 论文冻结：schema v4 `paper_payload.json`、LaTeX 正文、结果、引用、创新表达、逐条几何主张和图的最终尺寸契约已经通过 Presentation Firewall；强全域主张证书同时完成论文出现位置级绑定，或给出经终稿扫描核对的 `not_applicable` 决定。
 - 提交：独立审查关闭后，才把 manifest 的阶段改为 `submission` 并运行 finalizer。
 
 不要自动跨阶段。阶段改变是团队决策，记录到 `logs/decision_log.jsonl`。
@@ -41,10 +41,10 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
    `python scripts/init_competition_workspace.py <workspace> --competition CUMCM --year 2026 --problem A --branches 1 --innovation-mode <standard|championship>`
 
-3. 运行 `python scripts/preflight.py <workspace>`。
+3. 运行 `python scripts/preflight.py <workspace>`；后续总控与 Finalizer 使用同一个已通过预检的 Python 解释器，不能忽略 companion validator 的缺失模块。
 4. 原题与原始附件放入 `inputs/original/`，保留原文件和哈希。
 5. 冻结 `shared/problem_contract.json`：逐小题连接原题文件哈希与定位，写任务动词、输入、输出、约束、精度、明确产物和结构化上游依赖；`problem_contract.md` 只作阅读辅助。
-6. 当已有 v8–v13 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留科学内容，但强制重建题面契约、跨问接口、可执行复现与最终 PDF 复核记录。
+6. 当已有 v8–v14 工作区时运行 `python scripts/migrate_workspace.py <workspace>`；迁移保留科学内容，但把 Paper Payload 重置为 schema v4 draft、独立审查重置为 schema v3，并强制重建强全域主张证书、跨问接口、可执行复现与最终 PDF 复核记录。
 
 `standard` 是默认模式；`championship` 只提高独立审查和稳健性要求，不强迫增加模型、Agent 或计算量。
 
@@ -54,7 +54,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 - 每个可执行 requirement 必须通过 `rule_bindings` 指向 `source_id + locator + evidence_sha256`。
 - 官方网页或 PDF 的本地快照、哈希、核验方法和时间必须存在。
-- `build` 决定 LaTeX 引擎与主文件；finalizer 不根据赛事名或年份猜测。
+- `build` 决定 LaTeX 引擎；主文件固定为工作区内的 `paper/main.tex`，finalizer 不根据赛事名或年份猜测或编译其他路径。
 - AI 声明、详情文件、支撑包、页数、纸张和文件名都只从 verified profile 执行。
 - 官方来源变化、哈希失配或 profile 未核验时停止冻结与提交。
 
@@ -71,6 +71,16 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 7. 运行 `python scripts/validate_model_selection.py <workspace>`。
 
 不得用无依据的加权总分、TOPSIS 或“最高单项精度”替代结构判断。若复杂模型没有解决新的 failure，选择强基线。
+
+## 约束强全域主张
+
+模型冻结后完整读取 [execution-integrity.md](references/execution-integrity.md)，人工扫描冻结结果并先为拟使用的强主张建立草案与覆盖证据；论文成文后再完成每次实际措辞的局部定位并运行终检。若论文或结果使用 `first / earliest / global minimum / global maximum / optimal / safe over the full domain` 或等价强措辞，必须在 `synthesis/global_claim_certificates.json` 登记主张。验证器的自动发现只是对已加载论文 TeX 的有限正则哨兵：它不扫描结果 artifact，也不保证识别所有等价措辞；人工主张清单才是范围权威。只有人工核对冻结结果与已加载终稿来源，且正则哨兵也无命中时，才可填写可核对的 `not_applicable` 理由。
+
+每张证书至少连接论文/结果定位、变量与完整定义域、候选划分或覆盖策略、端点/非光滑点/内部点检查、排除论证、适用限制及真实 artifact 的路径、SHA-256、检查命令和时间。运行：
+
+`python scripts/validate_global_claim_certificates.py <workspace>`
+
+验证器只核对已登记证书是否完整、定位与 artifact 身份是否真实，并用有限正则对论文常见强措辞做漏项提示；主动登记的主张不会仅因未命中词表而被拒绝。它不自动证明覆盖完备、全局最优、首次事件或全域安全。团队仍须审查数学排除论证，并在证据不足时缩小定义域或弱化措辞。
 
 ## 验证创新主张
 
@@ -101,7 +111,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - `$statistical-analysis` 只在抽样、估计、预测、分布主张、机器学习或随机模拟需要时调用；确定性分析/几何/优化可内部标记 `not_applicable`，不得因此生成论文解释段；
 - claims review 始终检查摘要、正文、图表和结论是否超过结果与文献证据。
 
-运行 `validate_review_route.py`。各问完成后把覆盖与发现写入 schema v2 `audits/review_findings.json`；严重度仅用 `critical / major / minor / suggestion`。critical 和 major 必须有 `artifact_path + sha256 + command_or_check + checked_at`；critical 与 open major 阻断。允许的 accepted major 还必须写责任人、影响范围和后备方案，且不得超过 policy。运行 `validate_review_findings.py`。
+运行 `validate_review_route.py`。各问完成后把覆盖与发现写入 schema v3 `audits/review_findings.json`；每个 `status=pass` 的覆盖记录必须给出本问 `paper_anchor`、针对该主张的 `concrete_check`、实际执行的 `falsification_or_boundary_attack`、`outcome` 和 artifact-backed evidence，不能用“已检查/通过”代替审查。`outcome=finding_recorded` 必须对应实际 finding，`no_material_issue` 不得与同问同类 finding 矛盾。严重度仅用 `critical / major / minor / suggestion`；critical 和 major finding 必须有 `artifact_path + sha256 + command_or_check + checked_at`；critical 与 open major 阻断。允许的 accepted major 还必须写责任人、影响范围和后备方案，且不得超过 policy。运行 `validate_review_findings.py`。
 
 ## 来源、结果与复现
 
@@ -111,21 +121,22 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - `audits/data/data_provenance.csv` 覆盖所有原始与外部输入。
 - `synthesis/result_manifest.csv` 覆盖摘要、结论和关键图表中的核心数字，并标明所属小问，追踪到输入、命令、环境、单位、随机种子和文件哈希。
 - 每条结构化跨问依赖都写入 `shared/question_interfaces.json`；冻结上游 result fingerprint 与下游使用证据，上游改变即阻断。
-- `audits/reproduction/reproduction_status.json` 使用参数数组声明隔离重跑；Finalizer 实际执行并核对全部核心结果哈希，不接受人工填写的 pass。
+- `audits/reproduction/reproduction_status.json` 使用参数数组声明隔离重跑，并绑定工作区内真实入口文件的 SHA-256；清理范围只允许覆盖声明输出，不得删除输入、代码、环境或运行目录。Finalizer 实际执行并核对全部核心结果哈希，不接受内联答案或人工填写的 pass。
 - 不虚构数据、文献、实验、评委意见、评分或获奖概率；明确区分官方事实、计算结果、假设和推测。
 
 ## 竞赛论文表达防火墙
 
 写论文前完整读取 [paper-presentation-engine.md](references/paper-presentation-engine.md)。Control Plane、Scientific Solution Plane 和 Contest Paper Plane 单向隔离：
 
-- 模型冻结后生成 schema v3 `synthesis/paper_payload.json`；论文手以它为主要科学输入，只在核对事实时读取结果或引用台账。
+- 模型冻结后生成 schema v4 `synthesis/paper_payload.json`；论文手以它为主要科学输入，只在核对事实时读取结果或引用台账。
 - Payload 和正文不得出现 workflow stage、freeze/验收、hash、audit/review status、claim status、downstream interface、reproduction bookkeeping 或“不虚构置信区间/不提出创新”等否定性元话语。
 - 把内部概念翻译为竞赛原生语言：strong baseline → 基准/简化模型；baseline failure → 简化模型的具体局限；artifact-backed evidence → 数值/实验/推导结果。
 - 每段必须贡献于模型、推导、算法、结果、比较、验证、敏感性、局限或决策；内部状态段默认删除。
 - 每问先形成“主张—最短充分证据—最佳载体”表，再写正文；不按页数、图数或表数扩写，模型、结果或验证标题下没有实际内容时不得放行。
 - 正文数值精度由输入、参数、模型形式和显示需求决定，不展示远小于材料性不确定性的求解器位数。
 - 每问填写 `presentation_plan`：用 `answer_form / answer_anchor / answer_takeaway` 登记最短直接答案，用 `validation_form / validation_anchor / validation_takeaway` 登记最强验证；两个锚点都必须位于本问 `qNN.tex`，不得借用附录、全局章节或另一问的标签。不得只写“已独立复算/已有证书”而不给评委可核验的比较、误差或边界。
-- 当问题依赖空间几何、视线、遮蔽、可见性、投影、碰撞、坐标系或轨迹关系时，至少登记一幅 `role=mechanism` 的直观图，列出必须同时出现的对象与关系。几何图使用可复现 TikZ、Matplotlib 3D、Graphviz 或原生代码，不交给 SciPilot；非几何问题可写明 `not_applicable` 理由。
+- 几何债务按“主张”而不是按“小题”结清：每条材料性几何主张在 `geometry_claims` 中绑定独立的正文主张锚点、至少两个对象、至少一个关系、带标签公式、版面位置和 10 秒读图结论，并且恰好提供一幅已登记的 `mechanism` 图或具体 `not_needed_reason`。对象不少于 3 个、关系不少于 2 个或本问机理图被裁决为 required 时，不能用理由免图；必须在最终 LaTeX 尺寸复核。
+- 每幅登记图都必须记录与 LaTeX 实际一致的 `final_width`、最终尺寸最小标签字号和 `final_size_reviewed=true`；每幅 `data / diagnostic / decision` 量化图还必须把 `claim_anchor` 绑定到本问正文主张，并登记 `samples_per_pixel` 与过绘保真处理。最终字号不得低于 6 pt；每像素超过 2 个样本时不得写“无需处理”，应使用包络、聚合、密度、透明度或等价的保结构方案。
 - 每幅登记图必须具有信息性题注、可复现图源、明确支持的论文主张，并在正文用 `\ref`/`\autoref`/`\cref` 编号引用；PowerPoint、截图、手工 P 图或让 SciPilot 生成机理示意图均不放行。尺度差异明显的几何问题优先用“全局场景 + 局部判据”双面板。
 - 运行 `python scripts/validate_paper_presentation.py <workspace>`。
 
@@ -143,6 +154,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 写论文前完整读取 [latex-workflow.md](references/latex-workflow.md)；CUMCM 中文论文同时完整读取 [cumcm-paper-writing-and-figures.md](references/cumcm-paper-writing-and-figures.md) 与其证据底稿 [cumcm-corpus-evidence-2022-2025.md](references/cumcm-corpus-evidence-2022-2025.md)。需要核对逐篇差异时读取 [cumcm-paper-style-cards-2022-2025.csv](references/cumcm-paper-style-cards-2022-2025.csv) 与 [cumcm-paper-deep-reading-2022-2025.md](references/cumcm-paper-deep-reading-2022-2025.md)；全页视觉结论以 [cumcm-full-visual-review-summary-2022-2025.json](references/cumcm-full-visual-review-summary-2022-2025.json) 为边界。只迁移信息职责，不复制句子、模型、数值或版式。
 
 - 最终论文只维护 `paper/main.tex`、分章节 `.tex`、`paper/generated/*.tex`、`paper/figures/` 和 `paper/references.bib`。
+- `paper/main.tex` 及其子文件必须形成以 `paper/` 为根的静态字面量 TeX 输入闭包；动态宏路径、越界路径、非 `.tex` 正文输入和缺失的必需输入阻断。构建必须启用 `-recorder`，再把 `.fls` 中实际载入的本地 `.tex` 与静态闭包核对；任何额外输入都阻断，防止 `\import`、`\subfile` 或其他载入方式绕过论文、主张和相似度审计。
 - 不经 Word、Markdown、HTML、Notebook、Pandoc 或其他格式转换生成最终正文。
 - 不把题面复述、候选池、Agent 分工、内部评分、artifact 路径、哈希、调试过程或泛化优缺点套话写入最终论文；这些内容留在审计与复现台账。
 - 先逐项核对题面小问契约，再按实际小题建立独立 `.tex` 文件；`Qn` 必须对应 `qNN.tex`。每问就地完成“任务与依赖—模型—结果—验证/边界—后续问题沿用的判据或参数”，并核对题目要求的表格与结果文件；只在跨问风险确实存在时单列全局稳健性章节。正文必须脱离代码/数据附录仍能独立回答全部小问。
@@ -159,6 +171,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
   禁止把裸 `xelatex` 产物交给队员。独立稿只有 `build_report_qNN_standalone.json` 为 `pass`、`handoff_eligible=true` 且哈希匹配时才可称为“小问交付候选”；它永远不是赛事提交候选。构建器会检查竞赛语言、任务—模型—结果—验证职责、验证锚点、比较性验证的可见表/图和末页大面积空白。不要用页数或套话填充；缺少的是推导、比较、验证或边界时，补对应证据。
 
 - 程序生成数字与表格，正文只引用，禁止手抄关键结果。
+- submission-mode 构建报告必须为完整 PDF 的每页生成 `page_layout_metrics`。逐页复核除字体、公式、图表、裁切与匿名性外，还必须核对自动指标；下方空白比例超过 45% 的页面只能在确认属于结尾材料或有意结构后，填写 `intentional_end_matter` 或 `intentional_structure` 及具体说明，未触发页面填写 `not_flagged`。PDF、页面图像或自动指标变化都会使相应复核失效。
 
 ## 总控任务与配套 Skills
 
@@ -169,7 +182,7 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 - `$uncertainty-and-units`：单位、量纲、误差传播与量级检查。
 - `$scientific-critical-thinking`：独立科学审查与主张边界。
 - `$scipilot-figure-skill`：优先处理有源数据的量化科研图。先确定论证目标并剖析数据，再选图、按最终尺寸绘制、运行程序自检与 AI 读图闭环，最后导出矢量 PDF；它不处理示意图、流程图或架构图。若其目录含 `.venv/Scripts/python.exe`，所有 SciPilot 脚本统一使用该解释器，避免污染或误用全局 Python。
-- `$data-analytics:visualize-data`：用于图表契约、交互探索、通用可视化设计和第二视角 QA；不能替代 SciPilot 的数据剖析与成图闭环。
+- `$data-analytics:visualize-data`：可选辅助，用于图表契约、交互探索、通用可视化设计和第二视角 QA；不计入七个核心 Skills，也不能替代 SciPilot 的数据剖析与成图闭环。
 - 机理、几何、流程、网络或算法示意图使用可复现 TikZ/Graphviz/原生代码；不得为了调用 SciPilot 把概念图伪装成数据图。SciPilot 不可用时，按同一证据与成图契约直接使用 Matplotlib/Seaborn。
 
 拆成小题任务或独立验证任务时完整读取 [task-templates.md](references/task-templates.md)。每个任务只写自己的目录；共享符号、数据版本和接口由总控冻结。不要把预期答案、其他分支结论或优秀论文具体解法泄露给独立验证任务。
@@ -180,6 +193,6 @@ description: "Evidence-driven orchestration for CUMCM/国赛 and MCM/ICM/美赛.
 
 `python scripts/finalize_submission.py <workspace>`
 
-硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、题面文件或逐问定位无哈希契约、跨问结果快照过期、缺少 provenance、隔离重跑失败、Evidence Profile/Review Router 不完整、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、几何推理缺少机理图、Paper Payload/表达防火墙失败、高置信度聊天残留、关键公式—代码—结果不可追踪、AI 使用台账与交付文件未双向覆盖、相似度预检存在未复核的模板/优秀论文重合、占位符或仅标题章节、critical/open major 未关闭或 accepted major 超 policy、哈希失配、最终 PDF 有未复核或变化页面、profile 产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
+硬阻断仅限会使结论、复现、表达、合规或提交失效的问题：未核验规则、题面文件或逐问定位无哈希契约、强全域主张无完整证书或 artifact、跨问结果快照过期、缺少 provenance、隔离重跑失败、Evidence Profile/Review Router 不完整、审查通过记录没有真实攻击与证据、数学定义与实现不一致、模型选择无理由、创新或论文强主张无证据、题面小问与 `qNN.tex` 错配、本问没有直接答案或最强验证锚点、逐条几何主张债务未结清、图的最终尺寸可读性或量化图过绘契约失败、Paper Payload/表达防火墙失败、实际 TeX 输入脱离静态审计闭包、高置信度聊天残留、关键公式—代码—结果不可追踪、AI 使用台账与交付文件未双向覆盖、相似度预检存在未复核的模板/优秀论文重合、占位符或仅标题章节、critical/open major 未关闭或 accepted major 超 policy、哈希失配、最终 PDF 有未复核或变化页面、稀疏页面没有有效版面处置、profile 产物缺失、匿名/凭据问题或 LaTeX 构建失败。探索宽度、模型数量和复杂度不属于硬门禁。
 
 只有 `audits/submission/final_report.json` 为 `pass` 才能报告“技术上可提交”。这不等同于赛事合规的最终法律判断，也不保证任何奖项；由队员复核并完成正式上传。

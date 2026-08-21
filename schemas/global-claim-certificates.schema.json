@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/orchestrate-math-modeling/global-claim-certificates-v1.schema.json",
+  "title": "Certificates for first-event and full-domain claims",
+  "type": "object",
+  "required": ["schema_version", "status", "claims"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["draft", "complete", "not_applicable"]},
+    "no_strong_claims_rationale": {"type": "string", "minLength": 1},
+    "claims": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/claim"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "complete"}}, "required": ["status"]},
+      "then": {"properties": {"claims": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "not_applicable"}}, "required": ["status"]},
+      "then": {
+        "required": ["no_strong_claims_rationale"],
+        "properties": {"claims": {"maxItems": 0}}
+      }
+    }
+  ],
+  "$defs": {
+    "sourceLocation": {
+      "type": "object",
+      "required": ["source_path", "locator"],
+      "properties": {
+        "source_path": {"type": "string", "minLength": 1},
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A unique local locator close to the exact claim_text occurrence."
+        }
+      }
+    },
+    "artifactEvidence": {
+      "type": "object",
+      "required": [
+        "evidence_id", "artifact_path", "sha256", "command_or_check",
+        "checked_at", "supports"
+      ],
+      "properties": {
+        "evidence_id": {"type": "string", "minLength": 1},
+        "artifact_path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+        "command_or_check": {"type": "string", "minLength": 1},
+        "checked_at": {"type": "string", "minLength": 1},
+        "supports": {"type": "string", "minLength": 1}
+      }
+    },
+    "coverageCheck": {
+      "type": "object",
+      "required": ["status", "summary", "evidence_ids"],
+      "properties": {
+        "status": {"enum": ["pass", "not_applicable"]},
+        "summary": {"type": "string", "minLength": 1},
+        "evidence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "pass"}}, "required": ["status"]},
+          "then": {"properties": {"evidence_ids": {"minItems": 1}}}
+        }
+      ]
+    },
+    "claim": {
+      "type": "object",
+      "required": [
+        "claim_id", "question_id", "claim_type", "claim_text", "status",
+        "locations", "domain", "coverage", "checks", "exclusion_argument",
+        "scope_limitations", "evidence"
+      ],
+      "properties": {
+        "claim_id": {"type": "string", "minLength": 1},
+        "question_id": {"type": "string", "minLength": 1},
+        "claim_type": {
+          "enum": [
+            "first_event", "earliest", "global_minimum", "global_maximum",
+            "optimal", "full_domain_safety", "other_global"
+          ]
+        },
+        "claim_text": {
+          "type": "string",
+          "minLength": 6,
+          "description": "The exact local strong-claim wording, not a remote summary or paraphrase."
+        },
+        "status": {"enum": ["pending", "supported"]},
+        "locations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/sourceLocation"}
+        },
+        "domain": {
+          "type": "object",
+          "required": ["variables", "bounds_or_set", "inclusions_exclusions"],
+          "properties": {
+            "variables": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "bounds_or_set": {"type": "string", "minLength": 1},
+            "inclusions_exclusions": {"type": "string", "minLength": 1}
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "required": ["strategy", "candidate_partition_or_coverage", "completeness_argument"],
+          "properties": {
+            "strategy": {
+              "enum": [
+                "analytical_exhaustion", "event_partition", "candidate_enumeration",
+                "interval_subdivision", "monotonicity_reduction", "bounded_global_search",
+                "hybrid", "other"
+              ]
+            },
+            "candidate_partition_or_coverage": {"type": "string", "minLength": 1},
+            "completeness_argument": {"type": "string", "minLength": 1}
+          }
+        },
+        "checks": {
+          "type": "object",
+          "required": ["endpoints", "nonsmooth", "interior"],
+          "properties": {
+            "endpoints": {"$ref": "#/$defs/coverageCheck"},
+            "nonsmooth": {"$ref": "#/$defs/coverageCheck"},
+            "interior": {"$ref": "#/$defs/coverageCheck"}
+          }
+        },
+        "exclusion_argument": {"type": "string", "minLength": 1},
+        "scope_limitations": {"type": "string", "minLength": 1},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/artifactEvidence"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "strategy": {
+                    "enum": [
+                      "analytical_exhaustion", "interval_subdivision",
+                      "monotonicity_reduction", "bounded_global_search"
+                    ]
+                  }
+                },
+                "required": ["strategy"]
+              }
+            },
+            "required": ["coverage"]
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "properties": {
+                  "endpoints": {
+                    "properties": {"status": {"const": "pass"}},
+                    "required": ["status"]
+                  },
+                  "interior": {
+                    "properties": {"status": {"const": "pass"}},
+                    "required": ["status"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "coverage": {
+                "properties": {"strategy": {"enum": ["event_partition", "hybrid"]}},
+                "required": ["strategy"]
+              }
+            },
+            "required": ["coverage"]
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "properties": {
+                  "endpoints": {
+                    "properties": {"status": {"const": "pass"}},
+                    "required": ["status"]
+                  },
+                  "nonsmooth": {
+                    "properties": {"status": {"const": "pass"}},
+                    "required": ["status"]
+                  },
+                  "interior": {
+                    "properties": {"status": {"const": "pass"}},
+                    "required": ["status"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "coverage": {
+                "properties": {"strategy": {"const": "other"}},
+                "required": ["strategy"]
+              }
+            },
+            "required": ["coverage"]
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "endpoints": {
+                        "properties": {"status": {"const": "pass"}},
+                        "required": ["status"]
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "nonsmooth": {
+                        "properties": {"status": {"const": "pass"}},
+                        "required": ["status"]
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "interior": {
+                        "properties": {"status": {"const": "pass"}},
+                        "required": ["status"]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

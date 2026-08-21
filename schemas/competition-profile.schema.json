@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "profile_id", "competition", "edition", "status",
-    "verified_at", "sources", "build", "requirements", "rule_bindings"
+    "effective_from", "effective_to", "verified_at", "sources", "build", "requirements", "rule_bindings"
   ],
   "properties": {
     "schema_version": {"const": 2},
@@ -41,7 +41,7 @@
       "required": ["latex_engine", "main_document"],
       "properties": {
         "latex_engine": {"enum": ["xelatex", "pdflatex", "lualatex"]},
-        "main_document": {"type": "string", "minLength": 1}
+        "main_document": {"const": "main.tex"}
       }
     },
     "requirements": {

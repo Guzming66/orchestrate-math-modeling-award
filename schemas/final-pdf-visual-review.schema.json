@@ -1,11 +1,76 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Page-hash-bound final PDF visual review",
+  "$id": "https://example.invalid/orchestrate-math-modeling/final-pdf-visual-review-v2.schema.json",
+  "title": "Page-hash-bound final PDF visual review with layout evidence",
   "type": "object",
-  "required": ["schema_version", "status", "pdf_path", "pdf_sha256", "page_count", "render_dpi", "page_reviews"],
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "pdf_path", "pdf_sha256", "page_count", "render_dpi",
+    "page_text_fill", "page_layout_metrics", "page_reviews"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "status": {"enum": ["pending", "pass"]},
-    "page_reviews": {"type": "array"}
+    "pdf_path": {"type": "string"},
+    "pdf_sha256": {"type": "string"},
+    "page_count": {"type": "integer", "minimum": 0},
+    "render_dpi": {"type": "integer", "minimum": 72},
+    "page_text_fill": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}},
+    "page_layout_metrics": {"type": "array", "items": {"$ref": "#/$defs/pageMetric"}},
+    "page_reviews": {"type": "array", "items": {"$ref": "#/$defs/pageReview"}}
+  },
+  "$defs": {
+    "pageMetric": {
+      "type": "object",
+      "required": [
+        "page", "content_top_ratio", "content_bottom_ratio", "bottom_blank_ratio",
+        "word_count", "excluded_footer_word_count"
+      ],
+      "properties": {
+        "page": {"type": "integer", "minimum": 1},
+        "content_top_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "content_bottom_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "bottom_blank_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "word_count": {"type": "integer", "minimum": 0},
+        "excluded_footer_word_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "pageReview": {
+      "type": "object",
+      "required": [
+        "page", "image_path", "image_sha256", "status", "checks", "automated_metrics",
+        "layout_disposition", "reviewer", "checked_at", "notes"
+      ],
+      "properties": {
+        "page": {"type": "integer", "minimum": 1},
+        "image_path": {"type": "string", "minLength": 1},
+        "image_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+        "status": {"enum": ["pending", "pass"]},
+        "checks": {
+          "type": "object",
+          "required": [
+            "crop_and_overlap", "fonts_and_symbols", "equations_tables_figures",
+            "plot_readability_and_density", "float_flow_and_page_balance",
+            "pagination_and_anonymity"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "crop_and_overlap": {"enum": ["pending", "pass"]},
+            "fonts_and_symbols": {"enum": ["pending", "pass"]},
+            "equations_tables_figures": {"enum": ["pending", "pass"]},
+            "plot_readability_and_density": {"enum": ["pending", "pass"]},
+            "float_flow_and_page_balance": {"enum": ["pending", "pass"]},
+            "pagination_and_anonymity": {"enum": ["pending", "pass"]}
+          }
+        },
+        "automated_metrics": {"$ref": "#/$defs/pageMetric"},
+        "layout_disposition": {
+          "enum": ["pending", "not_flagged", "intentional_end_matter", "intentional_structure"]
+        },
+        "reviewer": {"type": "string"},
+        "checked_at": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    }
   }
 }

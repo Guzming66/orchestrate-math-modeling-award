@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-WORKFLOW_VERSION = 14
+WORKFLOW_VERSION = 15
 
 
 def write_text_if_missing(path: Path, content: str) -> None:
@@ -179,7 +179,25 @@ def create_workspace(args: argparse.Namespace) -> Path:
     root = Path(args.workspace).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
 
-    branch_names = [f"model-{chr(97 + index)}" for index in range(args.branches)]
+    manifest_path = root / "competition_manifest.json"
+    current_manifest: dict[str, object] = {}
+    if manifest_path.is_file():
+        try:
+            loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = {}
+        if isinstance(loaded, dict):
+            current_manifest = loaded
+    current_branches = current_manifest.get("branches")
+    if (
+        current_manifest.get("workflow_version") == WORKFLOW_VERSION
+        and isinstance(current_branches, list)
+        and len(current_branches) == args.branches
+        and all(isinstance(value, str) and value.strip() for value in current_branches)
+    ):
+        branch_names = [str(value).strip() for value in current_branches]
+    else:
+        branch_names = [f"model-{chr(97 + index)}" for index in range(args.branches)]
     profile, engine = paper_profile(args.competition)
     manifest = {
         "schema_version": WORKFLOW_VERSION,
@@ -198,7 +216,6 @@ def create_workspace(args: argparse.Namespace) -> Path:
         "paper_engine": engine,
         "competition_profile": "compliance/competition_profile.json",
     }
-    manifest_path = root / "competition_manifest.json"
     check_existing_manifest(manifest_path, manifest)
 
     base_dirs = [
@@ -428,6 +445,15 @@ def create_workspace(args: argparse.Namespace) -> Path:
         },
     )
     write_json_if_missing(
+        root / "synthesis" / "global_claim_certificates.json",
+        {
+            "schema_version": 1,
+            "status": "draft",
+            "claims": [],
+            "notes": "After model freeze, draft every result-level first-event, earliest, global minimum/maximum, optimal, or full-domain safety claim. After paper and reproduction, bind every paper occurrence or weaken the wording; use not_applicable only after checking the final paper.",
+        },
+    )
+    write_json_if_missing(
         root / "synthesis" / "review_route.json",
         {
             "schema_version": 1,
@@ -439,16 +465,16 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_json_if_missing(
         root / "synthesis" / "paper_payload.json",
         {
-            "schema_version": 3,
+            "schema_version": 4,
             "status": "draft",
             "questions": [],
-            "notes": "Use contest-native content; keep each direct-answer and strongest-validation anchor inside its own qNN.tex, and register a mechanism visual whenever geometry, trajectory or visibility carries the reasoning.",
+            "notes": "Use contest-native content; keep direct-answer and validation anchors inside qNN.tex, map each material geometry claim to its formula and visual decision, record final-size readability for every figure, and add sampling/overplot controls to quantitative figures.",
         },
     )
     write_json_if_missing(
         root / "audits" / "review_findings.json",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "status": "not_reviewed",
             "policy": {"max_accepted_major": 0 if args.innovation_mode == "championship" else 1},
             "coverage": [],
@@ -465,6 +491,8 @@ def create_workspace(args: argparse.Namespace) -> Path:
             "checked_at": "",
             "runner": {
                 "argv": [],
+                "entrypoint": "",
+                "entrypoint_sha256": "",
                 "working_directory": ".",
                 "timeout_seconds": 900,
                 "clean_paths": [],
@@ -476,12 +504,14 @@ def create_workspace(args: argparse.Namespace) -> Path:
     write_json_if_missing(
         root / "audits" / "presentation" / "final_pdf_visual_review.json",
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "pending",
             "pdf_path": "",
             "pdf_sha256": "",
             "page_count": 0,
             "render_dpi": 150,
+            "page_text_fill": [],
+            "page_layout_metrics": [],
             "page_reviews": [],
         },
     )
@@ -621,6 +651,10 @@ def create_workspace(args: argparse.Namespace) -> Path:
         ],
     )
     write_csv_header_if_missing(
+        root / "synthesis" / "entity_lexicon.csv",
+        ["entity_id", "display_name_zh", "display_name_en", "symbol", "unit", "notes"],
+    )
+    write_csv_header_if_missing(
         root / "audits" / "similarity" / "reference_corpus.csv",
         ["source_id", "source_type", "text_path", "sha256", "status", "notes"],
     )
@@ -647,13 +681,15 @@ def create_workspace(args: argparse.Namespace) -> Path:
         task_rows.extend(
             [
                 ["model-freeze", "all", "selection", joined_models, "", "synthesis/model_selection.json", "", "", "select the best validated solution, including the baseline when warranted", "pending", "true", "question-level adaptive evidence profiles, decisions and rejection reasons", ""],
+                ["global-claim-draft", "all", "verification", "model-freeze", "", "synthesis/global_claim_certificates.json", "", "", "draft result-level strong claims before paper wording exists", "pending", "true", "result-level first-event and full-domain claim drafts", ""],
                 ["question-interfaces", "all", "integration", "model-freeze", "", "shared/question_interfaces.json", "", "", "invalidate downstream work whenever an upstream registered result changes", "pending", "true", "frozen cross-question result snapshots", ""],
                 ["review-router", "all", "routing", "model-freeze", "", "synthesis/review_route.json", "", "", "route statistical review only where evidence profile requires it", "pending", "true", "review route and implementation-assumption checks", ""],
                 ["reproduction", "all", "reproduction", "question-interfaces", "", "audits/reproduction", "", "", "rerun selected solution in an isolated copy", "pending", "true", "executable argv contract and hash-matched clean-run report", ""],
-                ["paper-payload", "all", "synthesis", "model-freeze", "", "synthesis/paper_payload.json", "", "", "export scientific content without control-plane prose", "pending", "true", "sanitized payload with visible-validation and mechanism-visual plans", ""],
+                ["paper-payload", "all", "synthesis", "model-freeze", "", "synthesis/paper_payload.json", "", "", "export scientific content without control-plane prose", "pending", "true", "sanitized payload with claim-level geometry debt and final-size figure contracts", ""],
                 ["paper", "all", "writing", "paper-payload", "", "paper", "", "", "write only from the sanitized payload and verified result/citation identifiers", "pending", "true", "direct-LaTeX contest paper", ""],
                 ["citation-audit", "all", "citations", "paper", "", "audits/citations", "", "", "remove or weaken unsupported claims", "pending", "true", "verified citation ledger", ""],
-                ["scientific-review", "all", "review", "paper;citation-audit;reproduction;review-router", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "routed scientific, implementation, statistical, uncertainty and claim review", ""],
+                ["global-claim-certification", "all", "verification", "paper;reproduction;global-claim-draft", "", "synthesis/global_claim_certificates.json", "", "", "bind every paper occurrence to the result-level draft or weaken unsupported wording", "pending", "true", "paper-bound first-event and full-domain claim certificates, or a checked not-applicable decision", ""],
+                ["scientific-review", "all", "review", "paper;global-claim-certification;citation-audit;reproduction;review-router", "", "audits/review_findings.json", "", "", "weaken claims or repair model", "pending", "true", "routed scientific, implementation, statistical, uncertainty and claim review", ""],
                 ["paper-presentation", "all", "presentation", "scientific-review", "", "audits/presentation", "", "", "keep rigorous control-plane evidence out of contest prose", "pending", "true", "language firewall, visible validation, mechanism figures, precision and page-value audit", ""],
                 ["paper-integrity", "all", "integrity", "paper-presentation", "", "audits/integrity", "", "", "repair prose, derivation and implementation seams", "pending", "true", "chat-residue, repeated-template, vague-claim and equation-code-result audit", ""],
                 ["similarity-precheck", "all", "similarity", "paper-integrity", "", "audits/similarity", "", "", "rewrite copied or template-derived prose and document human review", "pending", "true", "local excellent-paper and template overlap report", ""],

@@ -21,6 +21,7 @@ from preflight import preflight
 from snapshot_environment import snapshot
 from validate_competition_profile import load_profile, validate_competition_profile
 from validate_innovation_portfolio import validate_innovation_portfolio
+from validate_global_claim_certificates import validate_global_claim_certificates
 from validate_model_selection import validate_model_selection
 from validate_paper_innovation import validate_paper_innovation
 from validate_paper_presentation import validate_paper_presentation
@@ -34,6 +35,7 @@ from validate_review_route import validate_review_route
 from validate_similarity_precheck import validate_similarity_precheck
 from validate_task_board import validate_task_board
 from run_reproduction import run_reproduction
+from latex_sources import loaded_tex_sources
 
 
 PASS = {"pass", "verified", "done"}
@@ -226,14 +228,12 @@ def check_ai_compliance(workspace: Path, profile: dict[str, object]) -> list[str
         enable_marker = str(ai.get("statement_enable_marker", "") or "").strip()
         source_text = "\n".join(
             strip_tex_comments(path.read_text(encoding="utf-8", errors="replace"))
-            for path in paper.rglob("*.tex")
-            if "build" not in path.relative_to(paper).parts
+            for path in loaded_tex_sources(paper)
         )
         if not enable_marker or enable_marker not in source_text:
             errors.append("competition profile AI usage statement is not enabled in the LaTeX source")
 
-        build = profile.get("build") if isinstance(profile.get("build"), dict) else {}
-        main_path = paper / str(build.get("main_document", "main.tex"))
+        main_path = paper / "main.tex"
         main = strip_tex_comments(main_path.read_text(encoding="utf-8", errors="replace")) if main_path.is_file() else ""
         statement_token = Path(statement_source).with_suffix("").as_posix() if statement_source else ""
         if statement_token.startswith("paper/"):
@@ -441,9 +441,7 @@ def check_paper_against_profile(
     if paper.get("anonymous") is True and str(build_report.get("pdf_author", "") or "").strip():
         errors.append("competition profile requires anonymous PDF metadata")
     if paper.get("table_of_contents_allowed") is False:
-        for path in (workspace / "paper").rglob("*.tex"):
-            if "build" in path.relative_to(workspace / "paper").parts:
-                continue
+        for path in loaded_tex_sources(workspace / "paper"):
             if re.search(r"\\tableofcontents\b", strip_tex_comments(path.read_text(encoding="utf-8", errors="replace"))):
                 errors.append("competition profile prohibits a table of contents")
                 break
@@ -500,6 +498,12 @@ def run_build(workspace: Path, engine: str, main_name: str = "main.tex") -> tupl
     return result.returncode, load_json(workspace / "paper" / "build" / report_name)
 
 
+def submission_build_contract_errors(build_report: dict[str, object]) -> list[str]:
+    if build_report.get("status") == "pass" and build_report.get("submission_eligible") is not True:
+        return ["submission LaTeX build report must declare submission_eligible=true"]
+    return []
+
+
 def finalize(workspace: Path) -> dict[str, object]:
     workspace = workspace.resolve()
     errors: list[str] = []
@@ -513,7 +517,7 @@ def finalize(workspace: Path) -> dict[str, object]:
     profile = load_profile(workspace / "compliance" / "competition_profile.json")
     build_configuration = profile.get("build") if isinstance(profile.get("build"), dict) else {}
     engine = str(build_configuration.get("latex_engine", ""))
-    main_document = str(build_configuration.get("main_document", "main.tex"))
+    main_document = "main.tex"
 
     preflight_report = preflight(workspace, competition)
     errors.extend(str(item) for item in preflight_report.get("errors", []))
@@ -549,6 +553,10 @@ def finalize(workspace: Path) -> dict[str, object]:
     model_selection_report = validate_model_selection(workspace)
     errors.extend(str(item) for item in model_selection_report.get("errors", []))
     warnings.extend(str(item) for item in model_selection_report.get("warnings", []))
+
+    global_claim_report = validate_global_claim_certificates(workspace)
+    errors.extend(str(item) for item in global_claim_report.get("errors", []))
+    warnings.extend(str(item) for item in global_claim_report.get("warnings", []))
 
     question_interfaces_report = validate_question_interfaces(workspace, final=True)
     errors.extend(str(item) for item in question_interfaces_report.get("errors", []))
@@ -610,6 +618,7 @@ def finalize(workspace: Path) -> dict[str, object]:
     ):
         errors.append("submission LaTeX build failed")
         errors.extend(str(item) for item in build_report.get("errors", []))
+    errors.extend(submission_build_contract_errors(build_report))
     if profile_report.get("status") == "pass" and build_report.get("status") == "pass":
         profile_paper_errors = check_paper_against_profile(workspace, profile, build_report)
         checks["paper_profile"] = profile_paper_errors
@@ -687,6 +696,7 @@ def finalize(workspace: Path) -> dict[str, object]:
         "innovation_status": innovation_report.get("status"),
         "paper_innovation_status": paper_innovation_report.get("status"),
         "model_selection_status": model_selection_report.get("status"),
+        "global_claim_certificate_status": global_claim_report.get("status"),
         "question_interfaces_status": question_interfaces_report.get("status"),
         "review_route_status": review_route_report.get("status"),
         "paper_presentation_status": paper_presentation_report.get("status"),

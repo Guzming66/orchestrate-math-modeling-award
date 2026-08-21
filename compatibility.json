@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "workflow_version": 14,
+  "workflow_version": 15,
   "python_minimum": "3.10",
   "companion_skills": [
     {
@@ -27,5 +27,5 @@
       "required": false
     }
   ],
-  "commands": {"all": ["pdfinfo", "pdftoppm"]}
+  "commands": {"all": ["pdfinfo", "pdftoppm", "pdftotext"]}
 }

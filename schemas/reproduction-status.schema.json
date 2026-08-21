@@ -8,9 +8,27 @@
     "status": {"enum": ["pending", "ready"]},
     "runner": {
       "type": "object",
-      "required": ["argv", "working_directory", "timeout_seconds", "clean_paths"]
+      "required": ["argv", "working_directory", "timeout_seconds", "clean_paths"],
+      "properties": {
+        "argv": {"type": "array", "items": {"type": "string"}},
+        "working_directory": {"type": "string"},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 7200},
+        "clean_paths": {"type": "array", "items": {"type": "string"}},
+        "entrypoint": {"type": "string"},
+        "entrypoint_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+      }
     },
     "expected_artifacts": {"type": "array"},
     "blocking_findings": {"type": "array"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "runner": {"required": ["entrypoint", "entrypoint_sha256"]}
+        }
+      }
+    }
+  ]
 }

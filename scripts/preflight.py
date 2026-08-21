@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -35,6 +36,26 @@ def skill_candidates(name: str, skill_root: Path) -> list[Path]:
         ]
     )
     return candidates
+
+
+def declared_cli_flags(script: Path) -> tuple[set[str], str | None]:
+    """Read argparse option literals without importing companion dependencies."""
+
+    try:
+        tree = ast.parse(script.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, SyntaxError) as exc:
+        return set(), f"cannot parse validator CLI: {exc}"
+    flags: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "add_argument":
+            continue
+        for argument in node.args:
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                if argument.value.startswith("-"):
+                    flags.add(argument.value)
+    return flags, None
 
 
 def preflight(workspace: Path | None = None, competition: str = "") -> dict[str, object]:
@@ -77,6 +98,13 @@ def preflight(workspace: Path | None = None, competition: str = "") -> dict[str,
         flags = entry.get("cli_flags")
         validator = root / "scripts" / "validate_citations.py"
         if isinstance(flags, list) and validator.is_file():
+            declared, parse_error = declared_cli_flags(validator)
+            checks[f"{name}:declared_cli_flags"] = sorted(declared)
+            if parse_error:
+                errors.append(f"{name}: {parse_error}")
+            for flag in flags:
+                if str(flag) not in declared:
+                    errors.append(f"{name}: validator CLI is missing {flag}")
             result = subprocess.run(
                 [sys.executable, str(validator), "--help"],
                 text=True,
@@ -86,11 +114,18 @@ def preflight(workspace: Path | None = None, competition: str = "") -> dict[str,
                 stderr=subprocess.STDOUT,
                 check=False,
             )
+            checks[f"{name}:validator_runtime"] = {
+                "python": sys.executable,
+                "returncode": result.returncode,
+            }
             if result.returncode != 0:
-                errors.append(f"{name}: validator --help failed")
-            for flag in flags:
-                if str(flag) not in result.stdout:
-                    errors.append(f"{name}: validator CLI is missing {flag}")
+                diagnostic = next(
+                    (line.strip() for line in result.stdout.splitlines() if "ModuleNotFoundError" in line),
+                    f"exit code {result.returncode}",
+                )
+                errors.append(
+                    f"{name}: validator cannot run under {sys.executable}: {diagnostic}"
+                )
 
     commands = config.get("commands")
     command_names: list[str] = []

@@ -10,11 +10,13 @@ import os
 import shutil
 import subprocess
 import sys
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 TOOLS = ("latexmk", "xelatex", "pdflatex", "bibtex", "pdfinfo", "pdftoppm", "pdftotext")
+PDF_TOOLS = {"pdfinfo", "pdftoppm", "pdftotext"}
 
 
 def run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -45,10 +47,31 @@ def resolve_tool(name: str) -> str | None:
     return executable
 
 
+def required_tools(workspace: Path) -> set[str]:
+    required = set(PDF_TOOLS)
+    try:
+        profile = json.loads(
+            (workspace / "compliance" / "competition_profile.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        profile = {}
+    build = profile.get("build") if isinstance(profile, dict) else None
+    engine = str(build.get("latex_engine", "")).strip() if isinstance(build, dict) else ""
+    if engine in {"xelatex", "pdflatex", "lualatex"}:
+        required.add(engine)
+    bibliography = workspace / "paper" / "references.bib"
+    if bibliography.is_file() and re.search(
+        r"@\w+\s*\{", bibliography.read_text(encoding="utf-8", errors="replace")
+    ):
+        required.add("bibtex")
+    return required
+
+
 def snapshot(workspace: Path) -> dict[str, object]:
     environment_dir = workspace / "environment"
     environment_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
+    warnings: list[str] = []
 
     freeze = run([sys.executable, "-m", "pip", "freeze", "--all"])
     lock_path = environment_dir / "requirements-lock.txt"
@@ -59,21 +82,25 @@ def snapshot(workspace: Path) -> dict[str, object]:
         lock_path.write_text("", encoding="utf-8")
 
     tools: dict[str, object] = {}
+    mandatory = required_tools(workspace)
     for name in TOOLS:
         executable = resolve_tool(name)
         if not executable:
-            tools[name] = {"status": "missing", "path": None, "version": None}
-            errors.append(f"required tool is missing: {name}")
+            tools[name] = {"status": "missing", "required": name in mandatory, "path": None, "version": None}
+            target = errors if name in mandatory else warnings
+            target.append(f"{'required' if name in mandatory else 'optional'} tool is missing: {name}")
             continue
         version_flag = "-v" if name.startswith("pdf") else "--version"
         version = run([executable, version_flag])
         tools[name] = {
             "status": "ok" if version.returncode == 0 else "version_failed",
+            "required": name in mandatory,
             "path": executable,
             "version": first_line(version.stdout),
         }
         if version.returncode != 0:
-            errors.append(f"unable to read version: {name}")
+            target = errors if name in mandatory else warnings
+            target.append(f"unable to read version: {name}")
 
     result = {
         "status": "pass" if not errors else "block",
@@ -87,6 +114,7 @@ def snapshot(workspace: Path) -> dict[str, object]:
         "requirements_lock": str(lock_path.relative_to(workspace)),
         "tools": tools,
         "errors": errors,
+        "warnings": warnings,
     }
     (environment_dir / "environment.json").write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",

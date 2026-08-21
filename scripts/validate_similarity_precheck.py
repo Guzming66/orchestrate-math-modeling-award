@@ -13,6 +13,7 @@ from pathlib import Path
 
 from build_latex import strip_tex_comments
 from evidence_utils import sha256_file
+from latex_sources import loaded_tex_sources
 
 
 IGNORE_HEADINGS = {
@@ -81,8 +82,8 @@ def read_registry(workspace: Path) -> tuple[list[dict[str, str]], list[str]]:
 def collect_paper(workspace: Path) -> list[tuple[str, str]]:
     paper = workspace / "paper"
     items: list[tuple[str, str]] = []
-    for path in sorted(paper.rglob("*.tex")):
-        if "build" in path.relative_to(paper).parts or path.name == "ai_usage_details.tex":
+    for path in loaded_tex_sources(paper):
+        if path.name == "ai_usage_details.tex":
             continue
         text = normalize(path.read_text(encoding="utf-8", errors="replace"))
         if text:

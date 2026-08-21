@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v3.schema.json",
+  "$id": "https://example.invalid/orchestrate-math-modeling/paper-payload-v4.schema.json",
   "title": "Sanitized contest-paper scientific payload",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "status", "questions"],
   "properties": {
-    "schema_version": {"const": 3},
+    "schema_version": {"const": 4},
     "status": {"enum": ["draft", "ready"]},
     "notes": {"type": "string"},
     "questions": {
@@ -81,21 +81,86 @@
               "mechanism_visual_must_show": {"type": "array", "items": {"type": "string", "minLength": 1}}
             }
           },
+          "geometry_claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "claim_anchor", "objects", "relations", "formula_anchor", "figure_anchor",
+                "not_needed_reason", "placement", "ten_second_takeaway", "final_size_reviewed"
+              ],
+              "properties": {
+                "claim_anchor": {"type": "string", "minLength": 1},
+                "objects": {
+                  "type": "array", "minItems": 2, "uniqueItems": true,
+                  "items": {"type": "string", "minLength": 1}
+                },
+                "relations": {
+                  "type": "array", "minItems": 1, "uniqueItems": true,
+                  "items": {"type": "string", "minLength": 1}
+                },
+                "formula_anchor": {"type": "string", "minLength": 1},
+                "figure_anchor": {"type": ["string", "null"]},
+                "not_needed_reason": {"type": ["string", "null"]},
+                "placement": {"type": "string", "minLength": 1},
+                "ten_second_takeaway": {"type": "string", "minLength": 1},
+                "final_size_reviewed": {"type": "boolean"}
+              },
+              "oneOf": [
+                {
+                  "properties": {
+                    "figure_anchor": {"type": "string", "minLength": 1},
+                    "not_needed_reason": {"type": "null"}
+                  }
+                },
+                {
+                  "properties": {
+                    "figure_anchor": {"type": "null"},
+                    "not_needed_reason": {"type": "string", "minLength": 1}
+                  }
+                }
+              ]
+            }
+          },
           "paper_section": {"type": "string", "minLength": 1},
           "figures": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["path", "role", "supported_claim", "source_data", "generator", "paper_anchor"],
+              "required": [
+                "path", "role", "supported_claim", "source_data", "generator", "paper_anchor",
+                "final_width", "minimum_label_pt", "final_size_reviewed"
+              ],
               "properties": {
                 "path": {"type": "string", "minLength": 1},
                 "role": {"enum": ["mechanism", "data", "diagnostic", "decision"]},
                 "supported_claim": {"type": "string", "minLength": 1},
                 "source_data": {"type": "string", "minLength": 1},
                 "generator": {"type": "string", "minLength": 1},
-                "paper_anchor": {"type": "string", "minLength": 1}
-              }
+                "paper_anchor": {"type": "string", "minLength": 1},
+                "claim_anchor": {"type": "string", "minLength": 1},
+                "final_width": {"type": "string", "minLength": 1},
+                "minimum_label_pt": {"type": "number", "minimum": 6},
+                "samples_per_pixel": {"type": ["number", "null"], "minimum": 0},
+                "overplot_handling": {"type": "string", "minLength": 1},
+                "final_size_reviewed": {"type": "boolean"}
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {"role": {"enum": ["data", "diagnostic", "decision"]}},
+                    "required": ["role"]
+                  },
+                  "then": {
+                    "required": [
+                      "claim_anchor", "final_width", "minimum_label_pt", "samples_per_pixel",
+                      "overplot_handling", "final_size_reviewed"
+                    ]
+                  }
+                }
+              ]
             }
           },
           "citations": {"type": "array", "items": {"type": "string"}}
